@@ -2,7 +2,15 @@ import useResumeStore from '../../store/useResumeStore'
 import { Plus, Trash2, Briefcase, ChevronDown, ChevronUp, GripVertical } from 'lucide-react'
 import { useState } from 'react'
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd'
+import AiButton from './AiButton'
+import { aiApi } from '../../api/aiApi'
+import { useAuth } from '../../context/AuthContext'
+import toast from 'react-hot-toast'
 
+/**
+ * Experience editor step for resume builder.
+ * Supports drag-drop ordering, collapsible cards, and AI bullet generation.
+ */
 export default function ExperienceStep() {
   const experience = useResumeStore((s) => s.data.experience)
   const addExperience = useResumeStore((s) => s.addExperience)
@@ -10,13 +18,57 @@ export default function ExperienceStep() {
   const removeExperience = useResumeStore((s) => s.removeExperience)
   const reorderExperience = useResumeStore((s) => s.reorderExperience)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  const { user } = useAuth()
 
   const toggle = (id: string) => setCollapsed(c => ({ ...c, [id]: !c[id] }))
 
+  /** Synchronizes UI order with Zustand store after drag-drop actions. */
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination) return
     if (result.destination.index === result.source.index) return
     reorderExperience(result.source.index, result.destination.index)
+  }
+
+  const handleGenerateBullets = async (id: string) => {
+    if (!user) {
+      toast.error('Please log in to use AI features')
+      return
+    }
+    const exp = experience.find(e => e.id === id)
+    if (!exp) return
+
+    if (!exp.position || !exp.company) {
+      toast.error('Please add a Position and Company first')
+      return
+    }
+
+    const result = await aiApi.generateBullets(user.userId, 'free', exp.position, exp.company, exp.description)
+    if (result && result.length > 0 && result[0] !== 'AI TEMPORARILY UNAVAILABLE') {
+      const formatted = result.map(b => `• ${b.replace(/^[•\-\*]\s*/, '')}`).join('\n')
+      // If there was existing description, we could append or replace. Here we replace or just let user edit.
+      // Usually better to replace if they asked to generate.
+      updateExperience(id, 'description', formatted)
+      toast.success('Bullets generated!')
+    } else {
+      throw new Error('AI is temporarily unavailable.')
+    }
+  }
+
+  const handleImproveBullets = async (id: string) => {
+    if (!user) return
+    const exp = experience.find(e => e.id === id)
+    if (!exp || !exp.description.trim()) {
+      toast.error('Write some description first, then improve it')
+      return
+    }
+
+    const result = await aiApi.improveSection(user.userId, 'free', 'experience', exp.description)
+    if (result && result !== exp.description && result !== 'AI TEMPORARILY UNAVAILABLE') {
+      updateExperience(id, 'description', result)
+      toast.success('Description improved!')
+    } else {
+      throw new Error('AI could not improve the description.')
+    }
   }
 
   return (
@@ -142,7 +194,13 @@ export default function ExperienceStep() {
                               </div>
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-slate-600 mb-1">Description / Key Achievements</label>
+                              <div className="flex items-center justify-between mb-1.5">
+                                <label className="block text-xs font-medium text-slate-600">Description / Key Achievements</label>
+                                <div className="flex items-center gap-2">
+                                  <AiButton label="Generate Bullets" onClick={() => handleGenerateBullets(exp.id)} variant="primary" />
+                                  <AiButton label="Improve" onClick={() => handleImproveBullets(exp.id)} disabled={!exp.description.trim()} />
+                                </div>
+                              </div>
                               <textarea
                                 value={exp.description}
                                 onChange={(e) => updateExperience(exp.id, 'description', e.target.value)}

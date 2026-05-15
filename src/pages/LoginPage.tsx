@@ -6,6 +6,37 @@ import { useAuth } from '../context/AuthContext'
 import toast from 'react-hot-toast'
 import { FileText, Eye, EyeOff } from 'lucide-react'
 import { OAUTH_BASE } from '../config/api'
+import { sendOtpEmail } from '../api/emailService'
+
+const OAUTH_RETRY_FLAG = 'resumeai_oauth_retry_once'
+
+function decodeErrorParam(value: string) {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return value
+  }
+}
+
+function looksLikeBlockedByClient(message: string) {
+  return /(err_blocked_by_client|blocked by client|generate_204)/i.test(message)
+}
+
+function looksLikeStaleSession(message: string) {
+  return /(session invalid|invalid session|account removed)/i.test(message)
+}
+
+function getFriendlyOAuthError(rawMessage: string) {
+  if (looksLikeBlockedByClient(rawMessage)) {
+    return 'Google sign-in was blocked by a browser extension. Disable ad/privacy blocking for this site and try again.'
+  }
+
+  if (looksLikeStaleSession(rawMessage)) {
+    return 'Your sign-in session expired. Please try Google sign-in again.'
+  }
+
+  return rawMessage || 'OAuth login failed'
+}
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -17,7 +48,45 @@ export default function LoginPage() {
 
   const mutation = useMutation({
     mutationFn: authApi.login,
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
+      // Check if OTP verification is required
+      if (data.requiresOtp) {
+        const targetEmail = data.otpEmail || data.email
+        const targetName = data.userName || data.fullName || 'User'
+
+        if (!targetEmail) {
+          toast.error('Could not start OTP verification. Please try again.')
+          return
+        }
+
+        if (data.rawOtp) {
+          const sent = await sendOtpEmail({
+            email: targetEmail,
+            name: targetName,
+            otp: data.rawOtp,
+          })
+
+          if (!sent) {
+            toast.error('Failed to send verification email automatically. Use resend on the OTP page.')
+          } else {
+            toast.success('Verification code sent to your email!')
+          }
+        } else {
+          toast.error('Verification code could not be sent automatically. Use resend on the OTP page.')
+        }
+
+        navigate('/verify-otp', {
+          state: {
+            email: targetEmail,
+            name: targetName,
+            purpose: data.otpPurpose || 'LOGIN',
+          },
+          replace: true,
+        })
+        return
+      }
+
+      // Normal login (e.g., if OTP was already verified or admin)
       login(data)
       toast.success(`Welcome back, ${data.fullName}!`)
       navigate(data.role === 'ADMIN' ? '/admin' : '/dashboard')
@@ -41,9 +110,21 @@ export default function LoginPage() {
     const oauthError = searchParams.get('error')
     if (oauthError) {
       handledOauthError.current = true
-      toast.error(decodeURIComponent(oauthError))
+      const decoded = decodeErrorParam(oauthError)
+      const shouldRetry = looksLikeStaleSession(decoded) && sessionStorage.getItem(OAUTH_RETRY_FLAG) !== '1'
+
+      if (shouldRetry) {
+        sessionStorage.setItem(OAUTH_RETRY_FLAG, '1')
+        toast('Session looked stale. Retrying Google sign-in once...')
+        setTimeout(() => handleGoogleLogin(), 300)
+        return
+      }
+
+      sessionStorage.removeItem(OAUTH_RETRY_FLAG)
+      toast.error(getFriendlyOAuthError(decoded))
+      navigate('/login', { replace: true })
     }
-  }, [searchParams])
+  }, [navigate, searchParams])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-900 to-indigo-900 flex items-center justify-center p-4">
@@ -117,10 +198,6 @@ export default function LoginPage() {
         <p className="text-center text-sm text-slate-500 mt-6">
           Don't have an account?{' '}
           <Link to="/register" className="text-primary-600 hover:text-primary-700 font-medium">Sign up free</Link>
-        </p>
-        <p className="text-center text-xs text-slate-400 mt-2">
-          Admin?{' '}
-          <Link to="/admin-login" className="text-red-600 hover:text-red-700 font-medium">Sign in here</Link>
         </p>
       </div>
     </div>

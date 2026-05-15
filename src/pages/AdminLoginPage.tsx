@@ -4,6 +4,7 @@ import { useMutation } from '@tanstack/react-query'
 import { Shield, Eye, EyeOff } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { authApi } from '../api/authApi'
+import { sendOtpEmail } from '../api/emailService'
 import { useAuth } from '../context/AuthContext'
 
 export default function AdminLoginPage() {
@@ -14,11 +15,46 @@ export default function AdminLoginPage() {
 
   const mutation = useMutation({
     mutationFn: authApi.login,
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
+      if (data.requiresOtp) {
+        const targetEmail = data.otpEmail || data.email
+        const targetName = data.userName || data.fullName || 'User'
+
+        if (!targetEmail) {
+          toast.error('Could not start OTP verification. Please try again.')
+          return
+        }
+
+        if (data.rawOtp) {
+          const sent = await sendOtpEmail({
+            email: targetEmail,
+            name: targetName,
+            otp: data.rawOtp,
+          })
+
+          if (!sent) {
+            toast.error('Failed to send verification email automatically. Use resend on the OTP page.')
+          } else {
+            toast.success('Verification code sent to your email!')
+          }
+        } else {
+          toast.error('Verification code could not be sent automatically. Use resend on the OTP page.')
+        }
+
+        navigate('/verify-otp', {
+          state: {
+            email: targetEmail,
+            name: targetName,
+            purpose: data.otpPurpose || 'LOGIN',
+          },
+          replace: true,
+        })
+        return
+      }
+
       if (data.role !== 'ADMIN') {
         logout()
         toast.error('Admin access required for this login.')
-        navigate('/dashboard')
         return
       }
 

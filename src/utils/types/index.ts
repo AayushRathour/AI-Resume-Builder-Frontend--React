@@ -7,6 +7,8 @@ export interface User {
   role: 'USER' | 'ADMIN'
   subscriptionPlan: 'FREE' | 'PREMIUM'
   isActive: boolean
+  isDeleted?: boolean
+  deletedAt?: string
   provider: 'LOCAL' | 'GOOGLE' | 'LINKEDIN'
   createdAt: string
 }
@@ -19,6 +21,12 @@ export interface AuthResponse {
   subscriptionPlan: string
   userId: number
   provider?: string   // optional — set by OAuthSuccessPage, omitted by form login
+  // OTP flow fields
+  requiresOtp?: boolean
+  otpEmail?: string
+  userName?: string
+  otpPurpose?: string
+  rawOtp?: string  // Raw OTP for EmailJS sending (only present during register/login response)
 }
 
 export interface RegisterRequest {
@@ -38,6 +46,30 @@ export interface UpdateProfileRequest {
   phone?: string
 }
 
+// ── OTP ───────────────────────────────────────────────────
+export interface OtpResponse {
+  success: boolean
+  message: string
+  email?: string
+  name?: string
+  expiresInSeconds?: number
+  resendCooldownSeconds?: number
+  rawOtp?: string  // Raw OTP for EmailJS sending (only on generate/resend)
+  authResponse?: AuthResponse
+}
+
+export interface OtpRequest {
+  email: string
+  purpose: string  // REGISTER | LOGIN | RESET_PASSWORD
+}
+
+export interface OtpVerifyRequest {
+  email: string
+  otp: string
+  purpose: string
+}
+
+
 // ── Resume ────────────────────────────────────────────────
 export interface Resume {
   resumeId: number
@@ -54,7 +86,7 @@ export interface Resume {
   experience?: string
   education?: string
   projects?: string
-  atsScore: number
+  atsScore: number | null
   status: 'DRAFT' | 'COMPLETE'
   language: string
   sectionsJson?: string
@@ -128,6 +160,10 @@ export interface AtsResult {
 export interface QuotaInfo {
   contentRemaining: number
   atsRemaining: number
+  contentAllowed: number
+  atsAllowed: number
+  contentUsed: number
+  atsUsed: number
 }
 
 // ── Export ────────────────────────────────────────────────

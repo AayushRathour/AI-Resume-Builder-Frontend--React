@@ -1,0 +1,9 @@
+export const API_BASE = 'http://localhost:8080/api/v1'
+export const OAUTH_BASE = 'http://localhost:8080'
+export const RAZORPAY_KEY_ID = 'rzp_test_mock'
+export const EMAILJS_SERVICE_ID = 'mock_service'
+export const EMAILJS_TEMPLATE_ID = 'mock_template'
+export const EMAILJS_PUBLIC_KEY = 'mock_public_key'
+export const WS_BASE_URL = 'ws://localhost:8080/ws'
+export const WS_NOTIFICATIONS_URL = 'ws://localhost:8080/ws-notifications'
+export const IS_DEV = false

@@ -2,6 +2,10 @@ import useResumeStore from '../../store/useResumeStore'
 import { Plus, Trash2, FolderOpen, ChevronDown, ChevronUp, GripVertical } from 'lucide-react'
 import { useState } from 'react'
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd'
+import AiButton from './AiButton'
+import { aiApi } from '../../api/aiApi'
+import { useAuth } from '../../context/AuthContext'
+import toast from 'react-hot-toast'
 
 export default function ProjectsStep() {
   const projects = useResumeStore((s) => s.data.projects)
@@ -10,6 +14,7 @@ export default function ProjectsStep() {
   const removeProject = useResumeStore((s) => s.removeProject)
   const reorderProject = useResumeStore((s) => s.reorderProject)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  const { user } = useAuth()
 
   const toggle = (id: string) => setCollapsed(c => ({ ...c, [id]: !c[id] }))
 
@@ -17,6 +22,26 @@ export default function ProjectsStep() {
     if (!result.destination) return
     if (result.destination.index === result.source.index) return
     reorderProject(result.source.index, result.destination.index)
+  }
+
+  const handleImproveProject = async (id: string) => {
+    if (!user) {
+      toast.error('Please log in to use AI features')
+      return
+    }
+    const proj = projects.find(p => p.id === id)
+    if (!proj || !proj.description.trim()) {
+      toast.error('Write some description first, then improve it')
+      return
+    }
+
+    const result = await aiApi.improveSection(user.userId, 'free', 'project', proj.description)
+    if (result && result !== proj.description && result !== 'AI TEMPORARILY UNAVAILABLE') {
+      updateProject(id, 'description', result)
+      toast.success('Description improved!')
+    } else {
+      throw new Error('AI could not improve the description.')
+    }
   }
 
   return (
@@ -117,7 +142,10 @@ export default function ProjectsStep() {
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-slate-600 mb-1">Description</label>
+                              <div className="flex items-center justify-between mb-1.5">
+                                <label className="block text-xs font-medium text-slate-600">Description</label>
+                                <AiButton label="Improve" onClick={() => handleImproveProject(proj.id)} disabled={!proj.description.trim()} />
+                              </div>
                               <textarea
                                 value={proj.description}
                                 onChange={(e) => updateProject(proj.id, 'description', e.target.value)}

@@ -1,44 +1,32 @@
+import { useNotifications } from '../context/NotificationContext'
 import { useAuth } from '../context/AuthContext'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { notificationApi } from '../api/notificationApi'
 import type { Notification } from '../types'
-import { Bell, Check, CheckCheck, X } from 'lucide-react'
+import { Bell, Check, CheckCheck, X, Trash2, FileText, Download, Zap, Briefcase, Star, AlertCircle, Info } from 'lucide-react'
+import { Link } from 'react-router-dom'
 
-const typeColors: Record<string, string> = {
-  ATS_COMPLETE: 'bg-blue-100 text-blue-700',
-  EXPORT_READY: 'bg-green-100 text-green-700',
-  AI_DONE: 'bg-purple-100 text-purple-700',
-  JOB_MATCH: 'bg-amber-100 text-amber-700',
-  PLAN_CHANGE: 'bg-indigo-100 text-indigo-700',
-  QUOTA_WARNING: 'bg-red-100 text-red-700',
+const typeConfig: Record<string, { color: string; icon: typeof Bell }> = {
+  RESUME_CREATED: { color: 'bg-emerald-100 text-emerald-700', icon: FileText },
+  RESUME_UPDATED: { color: 'bg-blue-100 text-blue-700', icon: FileText },
+  RESUME_DELETED: { color: 'bg-red-100 text-red-700', icon: Trash2 },
+  RESUME_EXPORTED: { color: 'bg-green-100 text-green-700', icon: Download },
+  EXPORT_READY: { color: 'bg-green-100 text-green-700', icon: Download },
+  EXPORT_FAILED: { color: 'bg-red-100 text-red-700', icon: AlertCircle },
+  ATS_COMPLETED: { color: 'bg-indigo-100 text-indigo-700', icon: Star },
+  ATS_COMPLETE: { color: 'bg-indigo-100 text-indigo-700', icon: Star },
+  AI_COMPLETED: { color: 'bg-purple-100 text-purple-700', icon: Zap },
+  AI_DONE: { color: 'bg-purple-100 text-purple-700', icon: Zap },
+  JOB_MATCH: { color: 'bg-amber-100 text-amber-700', icon: Briefcase },
+  JOB_APPLIED: { color: 'bg-teal-100 text-teal-700', icon: Briefcase },
+  TEMPLATE_CREATED: { color: 'bg-cyan-100 text-cyan-700', icon: FileText },
+  TEMPLATE_UPDATED: { color: 'bg-cyan-100 text-cyan-700', icon: FileText },
+  PLAN_CHANGE: { color: 'bg-indigo-100 text-indigo-700', icon: Star },
+  QUOTA_WARNING: { color: 'bg-red-100 text-red-700', icon: AlertCircle },
+  WELCOME: { color: 'bg-emerald-100 text-emerald-700', icon: Star },
+  GENERAL: { color: 'bg-slate-100 text-slate-600', icon: Info },
 }
 
 export default function NotificationPanel({ onClose }: { onClose: () => void }) {
-  const { user } = useAuth()
-  const qc = useQueryClient()
-
-  const { data: notifications = [] } = useQuery({
-    queryKey: ['notifications', user?.userId],
-    queryFn: () => notificationApi.getByRecipient(user!.userId),
-    enabled: !!user,
-  })
-
-  const markRead = useMutation({
-    mutationFn: (id: number | string) => notificationApi.markRead(id),
-    onSuccess: () => {
-      // Refresh both the notification list AND the navbar unread-count badge
-      qc.invalidateQueries({ queryKey: ['notifications', user?.userId] })
-      qc.invalidateQueries({ queryKey: ['unread-count', user?.userId] })
-    },
-  })
-
-  const markAllRead = useMutation({
-    mutationFn: () => notificationApi.markAllRead(user!.userId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['notifications', user?.userId] })
-      qc.invalidateQueries({ queryKey: ['unread-count', user?.userId] })
-    },
-  })
+  const { notifications, markAsRead, markAllAsRead, deleteNotification } = useNotifications()
 
   const formatTime = (dateStr: string) => {
     const d = new Date(dateStr)
@@ -47,51 +35,98 @@ export default function NotificationPanel({ onClose }: { onClose: () => void }) 
     if (diff < 1) return 'just now'
     if (diff < 60) return `${diff}m ago`
     if (diff < 1440) return `${Math.floor(diff / 60)}h ago`
+    if (diff < 10080) return `${Math.floor(diff / 1440)}d ago`
     return d.toLocaleDateString()
   }
 
+  const getConfig = (type: string) =>
+    typeConfig[type] || typeConfig.GENERAL
+
   return (
-    <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-slate-200 rounded-xl shadow-xl animate-fade-in overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+    <div className="absolute right-0 top-full mt-2 w-96 bg-white border border-slate-200 rounded-xl shadow-xl animate-fade-in overflow-hidden z-[100]"
+      id="notification-panel">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50/50">
         <div className="flex items-center gap-2">
-          <Bell size={16} className="text-slate-500" />
+          <Bell size={16} className="text-primary-600" />
           <span className="font-semibold text-sm text-slate-700">Notifications</span>
+          {notifications.filter(n => !n.isRead).length > 0 && (
+            <span className="bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5 font-bold">
+              {notifications.filter(n => !n.isRead).length}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => markAllRead.mutate()}
-            className="text-xs text-primary-600 hover:text-primary-700 flex items-center gap-1">
+          <button onClick={() => markAllAsRead()}
+            className="text-xs text-primary-600 hover:text-primary-700 flex items-center gap-1 hover:bg-primary-50 px-2 py-1 rounded-md transition-colors">
             <CheckCheck size={12} /> All read
           </button>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 hover:bg-slate-100 rounded transition-colors">
             <X size={16} />
           </button>
         </div>
       </div>
 
-      <div className="max-h-96 overflow-y-auto">
+      {/* Notification List */}
+      <div className="max-h-[420px] overflow-y-auto">
         {notifications.length === 0 ? (
-          <div className="py-10 text-center text-slate-400 text-sm">
-            <Bell size={28} className="mx-auto mb-2 opacity-30" />
-            No notifications yet
+          <div className="py-12 text-center text-slate-400 text-sm">
+            <Bell size={32} className="mx-auto mb-3 opacity-20" />
+            <p className="font-medium">No notifications yet</p>
+            <p className="text-xs mt-1">We'll notify you when something happens</p>
           </div>
         ) : (
-          notifications.slice(0, 20).map((n: Notification) => (
-            <div key={n.notificationId}
-              onClick={() => !n.isRead && markRead.mutate(n.notificationId)}
-              className={`px-4 py-3 border-b border-slate-50 last:border-0 cursor-pointer hover:bg-slate-50 transition-colors ${!n.isRead ? 'bg-primary-50/40' : ''}`}>
-              <div className="flex items-start gap-3">
-                <span className={`text-xs font-medium px-1.5 py-0.5 rounded mt-0.5 ${typeColors[n.type] || 'bg-slate-100 text-slate-600'}`}>
-                  {n.type.replace('_', ' ')}
-                </span>
-                {!n.isRead && <div className="w-2 h-2 bg-primary-500 rounded-full mt-1 ml-auto flex-shrink-0" />}
+          notifications.slice(0, 30).map((n: Notification) => {
+            const config = getConfig(n.type)
+            const Icon = config.icon
+            return (
+              <div key={n.notificationId}
+                className={`px-4 py-3 border-b border-slate-50 last:border-0 cursor-pointer hover:bg-slate-50 transition-all group ${!n.isRead ? 'bg-primary-50/30 border-l-2 border-l-primary-400' : ''}`}>
+                <div className="flex items-start gap-3">
+                  <div className={`p-1.5 rounded-lg mt-0.5 ${config.color}`}>
+                    <Icon size={14} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                        {n.type.replace(/_/g, ' ')}
+                      </span>
+                      {!n.isRead && <div className="w-1.5 h-1.5 bg-primary-500 rounded-full flex-shrink-0" />}
+                    </div>
+                    <p className="text-sm font-medium text-slate-800 truncate">{n.title}</p>
+                    <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{n.message}</p>
+                    <p className="text-xs text-slate-400 mt-1">{formatTime(n.sentAt)}</p>
+                  </div>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {!n.isRead && (
+                      <button onClick={(e) => { e.stopPropagation(); markAsRead(n.notificationId) }}
+                        className="p-1 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
+                        title="Mark as read">
+                        <Check size={14} />
+                      </button>
+                    )}
+                    <button onClick={(e) => { e.stopPropagation(); deleteNotification(n.notificationId) }}
+                      className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                      title="Delete">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
               </div>
-              <p className="text-sm font-medium text-slate-800 mt-1">{n.title}</p>
-              <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{n.message}</p>
-              <p className="text-xs text-slate-400 mt-1">{formatTime(n.sentAt)}</p>
-            </div>
-          ))
+            )
+          })
         )}
       </div>
+
+      {/* Footer */}
+      {notifications.length > 0 && (
+        <div className="px-4 py-2 border-t border-slate-100 bg-slate-50/50">
+          <Link to="/notifications" onClick={onClose}
+            className="text-xs text-primary-600 hover:text-primary-700 font-medium flex items-center justify-center gap-1">
+            View all notifications →
+          </Link>
+        </div>
+      )}
     </div>
   )
 }

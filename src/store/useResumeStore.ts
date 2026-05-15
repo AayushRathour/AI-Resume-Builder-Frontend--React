@@ -1,4 +1,8 @@
 import { create } from 'zustand'
+/**
+ * Central Zustand store for resume builder state.
+ * Maintains section data, step navigation, template selection, and JSON hydration.
+ */
 
 // ── Structured data types ────────────────────────────────────────────────
 
@@ -88,6 +92,7 @@ const defaultData: ResumeData = {
 // ── Utility ──────────────────────────────────────────────────────────────
 
 let _idCounter = 0
+/** Generates temporary IDs for in-memory section entries before backend sync. */
 function uid(): string {
   return `item_${Date.now()}_${++_idCounter}`
 }

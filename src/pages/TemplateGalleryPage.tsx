@@ -5,9 +5,11 @@ import { useAuth } from '../context/AuthContext'
 import { templateApi } from '../api/templateApi'
 import type { ResumeTemplate } from '../types'
 import MainLayout from '../components/layout/MainLayout'
+import ResumePreviewFrame from '../components/builder/ResumePreviewFrame'
 import { Search, Filter, Star, Lock } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { renderTemplate } from '../utils/templateEngine'
+import { RESUME_DIMENSIONS } from '../constants/previewDimensions'
 
 const CATEGORIES = ['ALL', 'PROFESSIONAL', 'CREATIVE', 'MODERN', 'MINIMALIST', 'ATS_OPTIMISED']
 const PLANS = ['ALL', 'FREE', 'PREMIUM']
@@ -82,7 +84,7 @@ export default function TemplateGalleryPage() {
 
   const filtered = templates.filter((t: ResumeTemplate) => {
     const matchSearch = t.name.toLowerCase().includes(search.toLowerCase()) ||
-                        t.description?.toLowerCase().includes(search.toLowerCase())
+      t.description?.toLowerCase().includes(search.toLowerCase())
     const matchCat = category === 'ALL' || !t.category || t.category === category
     const matchPlan = plan === 'ALL' || (plan === 'FREE' ? !t.isPremium : t.isPremium)
     return matchSearch && matchCat && matchPlan
@@ -103,140 +105,134 @@ export default function TemplateGalleryPage() {
 
   return (
     <MainLayout>
-        <div className="text-center mb-10">
-          <h1 className="text-3xl font-bold text-slate-800 mb-2">Resume Templates</h1>
-          <p className="text-slate-500">Professional designs optimised for ATS systems and human reviewers</p>
+      <div className="text-center mb-10">
+        <h1 className="text-3xl font-bold text-slate-800 mb-2">Resume Templates</h1>
+        <p className="text-slate-500">Professional designs optimised for ATS systems and human reviewers</p>
+      </div>
+
+      {/* Filters */}
+      <div className="card p-4 mb-6 flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            className="input-field pl-9" placeholder="Search templates..." />
         </div>
-
-        {/* Filters */}
-        <div className="card p-4 mb-6 flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input value={search} onChange={e => setSearch(e.target.value)}
-              className="input-field pl-9" placeholder="Search templates..." />
-          </div>
-          <div className="flex gap-2">
-            <select value={category} onChange={e => setCategory(e.target.value)} className="input-field text-sm w-auto">
-              {CATEGORIES.map(c => <option key={c}>{c}</option>)}
-            </select>
-            <select value={plan} onChange={e => setPlan(e.target.value)} className="input-field text-sm w-auto">
-              {PLANS.map(p => <option key={p}>{p}</option>)}
-            </select>
-          </div>
+        <div className="flex gap-2">
+          <select value={category} onChange={e => setCategory(e.target.value)} className="input-field text-sm w-auto">
+            {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+          </select>
+          <select value={plan} onChange={e => setPlan(e.target.value)} className="input-field text-sm w-auto">
+            {PLANS.map(p => <option key={p}>{p}</option>)}
+          </select>
         </div>
+      </div>
 
-        {/* Start without template */}
-        <div className="card p-4 mb-4 flex items-center justify-between bg-gradient-to-r from-primary-50 to-indigo-50 border-primary-100">
-          <div>
-            <h3 className="font-semibold text-slate-800 text-sm">Start from scratch</h3>
-            <p className="text-xs text-slate-500">Use our clean default template — you can switch templates later anytime.</p>
-          </div>
-          <button
-            onClick={() => {
-              if (isLoading) {
-                toast.loading('Loading templates...', { id: 'templates-loading' })
-                return
-              }
-              if (!defaultTemplate) {
-                toast.error('Default template not found')
-                return
-              }
-              if (!isAuthenticated) {
-                sessionStorage.setItem('resumeai_pending_template', String(defaultTemplate.templateId))
-                navigate('/login')
-                return
-              }
-              navigate(`/builder/new?templateId=${defaultTemplate.templateId}`)
-            }}
-            className="btn-primary text-sm shrink-0"
-          >
-            Start Without Template →
-          </button>
+      {/* Start without template */}
+      <div className="card p-4 mb-4 flex items-center justify-between bg-gradient-to-r from-primary-50 to-indigo-50 border-primary-100">
+        <div>
+          <h3 className="font-semibold text-slate-800 text-sm">Start from scratch</h3>
+          <p className="text-xs text-slate-500">Use our clean default template — you can switch templates later anytime.</p>
         </div>
+        <button
+          onClick={() => {
+            if (isLoading) {
+              toast.loading('Loading templates...', { id: 'templates-loading' })
+              return
+            }
+            if (!defaultTemplate) {
+              toast.error('Default template not found')
+              return
+            }
+            if (!isAuthenticated) {
+              sessionStorage.setItem('resumeai_pending_template', String(defaultTemplate.templateId))
+              navigate('/login')
+              return
+            }
+            navigate(`/builder/new?templateId=${defaultTemplate.templateId}`)
+          }}
+          className="btn-primary text-sm shrink-0"
+        >
+          Start Without Template →
+        </button>
+      </div>
 
-        {/* Results count */}
-        <p className="text-sm text-slate-500 mb-4">{filtered.length} templates</p>
+      {/* Results count */}
+      <p className="text-sm text-slate-500 mb-4">{filtered.length} templates</p>
 
-        {/* Grid */}
-        {isLoading ? (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {[1,2,3,4,5,6,7,8].map(i => <div key={i} className="h-64 bg-slate-200 rounded-xl animate-pulse" />)}
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="text-center py-20 text-slate-400">
-            <Filter size={40} className="mx-auto mb-3 opacity-30" />
-            <p>No templates match your filters</p>
-          </div>
-        ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filtered.map((t: ResumeTemplate) => (
-              <div key={t.templateId} className="template-card group">
-                {/* Thumbnail */}
-                <div className="relative h-48 bg-slate-100 overflow-hidden">
-                  {t.thumbnailUrl ? (
-                    <img src={t.thumbnailUrl} alt={t.name} className="w-full h-full object-cover" />
-                  ) : t.htmlLayout ? (
-                    <iframe
-                      title={t.name}
-                      className="w-full h-full pointer-events-none"
-                      style={{ border: 'none', transform: 'scale(0.5)', transformOrigin: 'top left', width: '200%', height: '200%' }}
-                      srcDoc={`
-                        <html>
-                          <head>
-                            <style>
-                              body { margin: 0; padding: 1rem; font-size: 12px; }
-                              ${t.cssStyles || ''}
-                            </style>
-                          </head>
-                          <body>
-                            ${previewTemplateHtml(t)}
-                          </body>
-                        </html>
-                      `}
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center h-full">
-                      <div className="text-center p-4 w-full">
-                        <div className="h-2 bg-slate-300 rounded mb-1.5 w-3/4 mx-auto" />
-                        <div className="h-1.5 bg-slate-200 rounded mb-1 w-1/2 mx-auto" />
-                        <div className="h-1 bg-slate-200 rounded mb-3 w-2/3 mx-auto" />
-                      </div>
+      {/* Grid */}
+      {isLoading ? (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {[1, 2, 3, 4, 5, 6, 7, 8].map(i => <div key={i} className="h-64 bg-slate-200 rounded-xl animate-pulse" />)}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-20 text-slate-400">
+          <Filter size={40} className="mx-auto mb-3 opacity-30" />
+          <p>No templates match your filters</p>
+        </div>
+      ) : (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {filtered.map((t: ResumeTemplate) => (
+            <div key={t.templateId} className="template-card group">
+              {/* Thumbnail - uses universal A4 frame with dynamic scaling */}
+              <div className="relative overflow-hidden bg-slate-100 rounded-t-xl" style={{
+                width: '100%',
+                aspectRatio: RESUME_DIMENSIONS.ASPECT_RATIO,
+                minHeight: RESUME_DIMENSIONS.PREVIEW_SIZES.GALLERY.height,
+              }}>
+                {t.thumbnailUrl ? (
+                  <img src={t.thumbnailUrl} alt={t.name} className="w-full h-full object-cover" />
+                ) : t.htmlLayout ? (
+                  <ResumePreviewFrame
+                    html={previewTemplateHtml(t)}
+                    css={t.cssStyles || ''}
+                    containerWidth={RESUME_DIMENSIONS.PREVIEW_SIZES.GALLERY.width}
+                    containerHeight={RESUME_DIMENSIONS.PREVIEW_SIZES.GALLERY.height}
+                    title={t.name}
+                    wrapperClassName="pointer-events-none"
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center p-4 w-full">
+                      <div className="h-2 bg-slate-300 rounded mb-1.5 w-3/4 mx-auto" />
+                      <div className="h-1.5 bg-slate-200 rounded mb-1 w-1/2 mx-auto" />
+                      <div className="h-1 bg-slate-200 rounded mb-3 w-2/3 mx-auto" />
                     </div>
-                  )}
-                  {t.isPremium && (
-                    <div className="absolute top-2 right-2 badge-premium flex items-center gap-1 z-10">
-                      <Star size={10} /> Premium
-                    </div>
-                  )}
-                  {!t.isPremium && (
-                    <div className="absolute top-2 right-2 badge-free z-10">Free</div>
-                  )}
-                  {/* Hover overlay */}
-                  <div className="absolute inset-0 bg-primary-900/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 z-20">
-                    <button onClick={() => setPreviewTemplate(t)}
-                      className="text-xs bg-white/20 hover:bg-white/40 text-white px-3 py-1.5 rounded-lg transition-colors border border-white/30">
-                      Preview
-                    </button>
-                    <button onClick={() => handleUseTemplate(t)}
-                      className="text-xs bg-white text-primary-700 hover:bg-primary-50 px-3 py-1.5 rounded-lg transition-colors font-medium">
-                      Use This
-                    </button>
                   </div>
-                </div>
-                <div className="p-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <h3 className="font-semibold text-slate-800 text-sm">{t.name}</h3>
-                    {t.isPremium && !isPremium && <Lock size={12} className="text-amber-400" />}
+                )}
+                {t.isPremium && (
+                  <div className="absolute top-2 right-2 badge-premium flex items-center gap-1 z-10">
+                    <Star size={10} /> Premium
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-slate-400 capitalize">{t.category?.toLowerCase().replace('_', ' ')}</span>
-                    <span className="text-xs text-slate-400">{t.usageCount} uses</span>
-                  </div>
+                )}
+                {!t.isPremium && (
+                  <div className="absolute top-2 right-2 badge-free z-10">Free</div>
+                )}
+                {/* Hover overlay */}
+                <div className="absolute inset-0 bg-primary-900/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 z-20">
+                  <button onClick={() => setPreviewTemplate(t)}
+                    className="text-xs bg-white/20 hover:bg-white/40 text-white px-3 py-1.5 rounded-lg transition-colors border border-white/30">
+                    Preview
+                  </button>
+                  <button onClick={() => handleUseTemplate(t)}
+                    className="text-xs bg-white text-primary-700 hover:bg-primary-50 px-3 py-1.5 rounded-lg transition-colors font-medium">
+                    Use This
+                  </button>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+              <div className="p-3">
+                <div className="flex items-center justify-between mb-1">
+                  <h3 className="font-semibold text-slate-800 text-sm">{t.name}</h3>
+                  {t.isPremium && !isPremium && <Lock size={12} className="text-amber-400" />}
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-slate-400 capitalize">{t.category?.toLowerCase().replace('_', ' ')}</span>
+                  <span className="text-xs text-slate-400">{t.usageCount} uses</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Preview Modal */}
       {previewTemplate && (
@@ -249,27 +245,23 @@ export default function TemplateGalleryPage() {
               </div>
               <button onClick={() => setPreviewTemplate(null)} className="text-slate-400 hover:text-slate-600 p-2">✕</button>
             </div>
-            <div className="p-6 h-[500px]">
+            <div className="p-6" style={{
+              maxHeight: 'calc(90vh - 140px)',
+              overflow: 'auto',
+              display: 'flex',
+              justifyContent: 'center',
+              backgroundColor: '#f5f5f5',
+            }}>
               {previewTemplate.htmlLayout ? (
-                <iframe
-                  title="Preview"
-                  className="w-full h-full border-none"
-                  srcDoc={`
-                    <html>
-                      <head>
-                        <style>
-                          body { margin: 0; padding: 2rem; background: white; }
-                          ${previewTemplate.cssStyles || ''}
-                        </style>
-                      </head>
-                      <body>
-                        ${previewTemplateHtml(previewTemplate)}
-                      </body>
-                    </html>
-                  `}
+                <ResumePreviewFrame
+                  html={previewTemplateHtml(previewTemplate)}
+                  css={previewTemplate.cssStyles || ''}
+                  containerWidth={RESUME_DIMENSIONS.PREVIEW_SIZES.MODAL.width}
+                  containerHeight={RESUME_DIMENSIONS.PREVIEW_SIZES.MODAL.height}
+                  title={`Preview: ${previewTemplate.name}`}
                 />
               ) : (
-                <p className="text-slate-400 text-center py-8">Template preview not available</p>
+                <div className="text-slate-400 text-center py-20">Unable to load preview</div>
               )}
             </div>
             <div className="p-4 border-t border-slate-100 flex justify-end gap-2">

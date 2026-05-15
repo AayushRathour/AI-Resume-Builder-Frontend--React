@@ -6,7 +6,7 @@
  * - If a field has user data → show user data
  * - If a field is empty → show blank (no dummy fallback data)
  * - Complex sections render as formatted HTML blocks
- * - Links are auto-formatted as clickable
+ * - Links are injected as URL strings; templates control labels/anchors
  */
 import type { ResumeData } from '../store/useResumeStore'
 
@@ -22,16 +22,24 @@ function escapeHtml(text: string): string {
     .replace(/'/g, '&#039;')
 }
 
-// ── Auto-link helper ─────────────────────────────────────────────────────
+// ── Link replacement helper ─────────────────────────────────────────────
 
-function autoLink(url: string, label?: string): string {
-  if (!url) return ''
+function replaceLinkToken(html: string, key: string, url: string): string {
+  const tokenPattern = `\\{\\{\\s*${key}\\s*\\}\\}|\\{\\s*${key}\\s*\\}|\\[\\[\\s*${key}\\s*\\]\\]`
+  const tokenRegex = new RegExp(tokenPattern, 'gi')
   const escaped = escapeHtml(url)
-  const display = label || escaped
-  if (/^https?:\/\//i.test(url)) {
-    return `<a href="${escaped}" target="_blank" style="color:#4f46e5;text-decoration:none;">${display}</a>`
+
+  if (!escaped) {
+    return html.replace(tokenRegex, '')
   }
-  return display
+
+  const attrRegex = new RegExp(`(href|src)=(["']?)\\s*(${tokenPattern})\\s*\\2`, 'gi')
+  const normalized = html.replace(attrRegex, (_match, attr, quote) => {
+    const safeQuote = quote || '"'
+    return `${attr}=${safeQuote}${escaped}${safeQuote}`
+  })
+
+  return normalized.replace(tokenRegex, escaped)
 }
 
 function buildInitials(name: string): string {
@@ -127,10 +135,10 @@ export function renderTemplate(htmlTemplate: string, data: ResumeData): string {
   html = replaceToken(html, 'location', escapeHtml(data.personal.location))
   html = replaceToken(html, 'title', escapeHtml(data.personal.title))
 
-  // Links — auto-formatted as clickable
-  html = replaceToken(html, 'linkedin', autoLink(data.personal.linkedin, 'LinkedIn'))
-  html = replaceToken(html, 'github', autoLink(data.personal.github, 'GitHub'))
-  html = replaceToken(html, 'website', autoLink(data.personal.website, 'Portfolio'))
+  // Links — inject URL strings; templates decide anchor markup and labels
+  html = replaceLinkToken(html, 'linkedin', data.personal.linkedin)
+  html = replaceLinkToken(html, 'github', data.personal.github)
+  html = replaceLinkToken(html, 'website', data.personal.website)
 
   // Summary
   html = replaceToken(html, 'summary', escapeHtml(data.summary))

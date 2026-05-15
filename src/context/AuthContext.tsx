@@ -1,7 +1,12 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import type { User, AuthResponse } from '../types'
 import { authApi } from '../api/authApi'
+import axios from 'axios'
 
+/**
+ * Auth context managing session bootstrap, token persistence,
+ * route-safe logout handling, and profile refresh.
+ */
 interface AuthContextType {
   user: User | null
   token: string | null
@@ -19,6 +24,41 @@ const AuthContext = createContext<AuthContextType | null>(null)
 const AUTH_USER_KEY = 'resumeai_user'
 const AUTH_TOKEN_KEY = 'resumeai_token'
 
+function clearStoredAuth() {
+  localStorage.removeItem(AUTH_USER_KEY)
+  localStorage.removeItem(AUTH_TOKEN_KEY)
+  localStorage.removeItem('token')
+  sessionStorage.removeItem(AUTH_USER_KEY)
+  sessionStorage.removeItem(AUTH_TOKEN_KEY)
+  sessionStorage.removeItem('token')
+}
+
+/**
+ * Determines whether an API failure means the current session
+ * should be treated as invalid and cleared.
+ */
+function isInvalidSessionError(error: unknown): boolean {
+  if (!axios.isAxiosError(error)) return false
+
+  const status = error.response?.status
+  const message = String((error.response?.data as any)?.message ?? '')
+  const accountStateIssue = /deactivated|suspended|disabled|deleted|not found/i.test(message)
+
+  return status === 401
+    || status === 404
+    || (status === 403 && accountStateIssue)
+    || (status === 400 && accountStateIssue)
+}
+
+/** Chooses the login route based on current application area. */
+function getAuthRedirectPath(pathname: string) {
+  if (pathname.startsWith('/admin') || pathname === '/admin-login') {
+    return '/admin-login'
+  }
+
+  return '/login'
+}
+
 function readStoredUser(): User | null {
   const raw = localStorage.getItem(AUTH_USER_KEY) || sessionStorage.getItem(AUTH_USER_KEY)
   if (!raw) return null
@@ -33,7 +73,10 @@ function readStoredUser(): User | null {
 }
 
 function readStoredToken(): string | null {
-  return localStorage.getItem(AUTH_TOKEN_KEY) || sessionStorage.getItem(AUTH_TOKEN_KEY)
+  return localStorage.getItem(AUTH_TOKEN_KEY)
+    || sessionStorage.getItem(AUTH_TOKEN_KEY)
+    || localStorage.getItem('token')
+    || sessionStorage.getItem('token')
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -44,6 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let alive = true
 
+    // Bootstraps persisted login state and validates token using profile API.
     const bootstrapAuth = async () => {
       if (!token) {
         if (alive) setAuthReady(true)
@@ -55,8 +99,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!alive) return
         setUser(profile)
         localStorage.setItem(AUTH_USER_KEY, JSON.stringify(profile))
-      } catch {
-        // Keep the cached user if the profile request fails, but do not block the app.
+      } catch (error) {
+        if (!alive) return
+
+        if (isInvalidSessionError(error)) {
+          setUser(null)
+          setToken(null)
+          clearStoredAuth()
+        }
       } finally {
         if (alive) setAuthReady(true)
       }
@@ -64,6 +114,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     bootstrapAuth()
     return () => { alive = false }
+  }, [token])
+
+  useEffect(() => {
+    if (!token) return
+
+    let cancelled = false
+    // Polls profile to capture account state changes (suspended/deleted) quickly.
+    const interval = window.setInterval(async () => {
+      try {
+        const profile = await authApi.getProfile()
+        if (cancelled) return
+        setUser(profile)
+        localStorage.setItem(AUTH_USER_KEY, JSON.stringify(profile))
+      } catch (error) {
+        if (cancelled) return
+        if (isInvalidSessionError(error)) {
+          setUser(null)
+          setToken(null)
+          clearStoredAuth()
+          const target = getAuthRedirectPath(window.location.pathname)
+          if (window.location.pathname !== target) {
+            window.location.href = target
+          }
+        }
+      }
+    }, 30_000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
   }, [token])
 
   const login = (response: AuthResponse) => {
@@ -91,10 +172,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
     setToken(null)
 
-    localStorage.removeItem(AUTH_USER_KEY)
-    localStorage.removeItem(AUTH_TOKEN_KEY)
-    sessionStorage.removeItem(AUTH_USER_KEY)
-    sessionStorage.removeItem(AUTH_TOKEN_KEY)
+    clearStoredAuth()
+    const target = getAuthRedirectPath(window.location.pathname)
+    if (window.location.pathname !== target) {
+      window.location.replace(target)
+    }
   }
 
   const updateUser = (updates: Partial<User>) => {

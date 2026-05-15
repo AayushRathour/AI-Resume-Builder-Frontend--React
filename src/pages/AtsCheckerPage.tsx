@@ -5,8 +5,15 @@ import api from '../api/axios'
 import { EP_AI } from '../config/endpoints'
 import toast from 'react-hot-toast'
 import AtsScoreBar from '../components/AtsScoreBar'
+import { useAuth } from '../context/AuthContext'
+import { queryClient } from '../lib/queryClient'
 
+/**
+ * ATS checker page for upload-based resume scoring.
+ * Sends resume files to AI backend and renders score, keywords, and recommendations.
+ */
 export default function AtsCheckerPage() {
+  const { user } = useAuth()
   const [file, setFile] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [result, setResult] = useState<any | null>(null)
@@ -17,6 +24,7 @@ export default function AtsCheckerPage() {
     }
   }
 
+  /** Handles file upload and normalizes both structured and fallback ATS responses. */
   const handleUpload = async () => {
     if (!file) {
       toast.error('Please select a file first')
@@ -29,22 +37,43 @@ export default function AtsCheckerPage() {
     setIsUploading(true)
     try {
       const response = await api.post('/ai/ats-upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: { 'Content-Type': 'multipart/form-data' },
+        params: user?.userId ? { userId: user.userId } : undefined,
       })
       
-      const text = response.data.result || response.data
+      // Backend returns StatusResponse: { status, data, message }
+      const payload = response.data ?? {}
+      const inner = payload.data ?? payload
+
+      // ATSResponse has { score, recommendations, missingKeywords }
+      // Fallback map has { result: "..." }
+      if (inner.score !== undefined) {
+        // Structured ATSResponse from AI
+        setResult({
+          score: Math.min(100, Math.max(0, Number(inner.score ?? 0))),
+          rawResponse: inner.recommendations ?? inner.result ?? '',
+          missingKeywords: inner.missingKeywords ?? []
+        })
+      } else {
+        // Fallback string-based response
+        const text = inner.result || JSON.stringify(inner)
+        const scoreMatch = text.match(/score.*?(\d+)/i) || text.match(/(\d+)\/100/) || text.match(/(\d+)/)
+        const score = scoreMatch ? parseInt(scoreMatch[1], 10) : 0
+
+        setResult({
+          score: Math.min(100, Math.max(0, score)),
+          rawResponse: text,
+          missingKeywords: []
+        })
+      }
       
-      // Try to parse structured response from AI text
-      const scoreMatch = text.match(/score.*?(\d+)/i) || text.match(/(\d+)\/100/) || text.match(/(\d+)/)
-      const score = scoreMatch ? parseInt(scoreMatch[1], 10) : 0
-      
-      setResult({
-        score: Math.min(100, Math.max(0, score)),
-        rawResponse: text
-      })
-      
+      if (user?.userId) {
+        queryClient.invalidateQueries({ queryKey: ['quota', user.userId] })
+      }
+
       toast.success('Resume analyzed successfully!')
     } catch (error: any) {
+      console.error('[ATS] Upload failed:', error?.response?.data || error.message)
       toast.error(error?.response?.data?.message || 'Failed to analyze resume. Make sure it is a valid PDF, DOCX, or TXT file.')
     } finally {
       setIsUploading(false)
@@ -100,9 +129,24 @@ export default function AtsCheckerPage() {
                   <AtsScoreBar score={result.score} />
                 </div>
                 
+                {result.missingKeywords && result.missingKeywords.length > 0 && (
+                  <div className="bg-amber-50 p-4 rounded-xl border border-amber-100">
+                    <h3 className="font-semibold text-amber-800 flex items-center gap-2 mb-2">
+                      <AlertCircle size={16} /> Missing Keywords
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {result.missingKeywords.map((kw: string, i: number) => (
+                        <span key={i} className="px-2 py-1 bg-white border border-amber-200 text-amber-700 text-xs rounded-md shadow-sm">
+                          {kw}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
                 <div className="bg-primary-50 p-4 rounded-xl border border-primary-100">
                   <h3 className="font-semibold text-primary-800 flex items-center gap-2 mb-2">
-                    <AlertCircle size={16} /> AI Suggestions
+                    <CheckCircle size={16} /> AI Suggestions
                   </h3>
                   <div className="text-sm text-primary-900 whitespace-pre-wrap leading-relaxed">
                     {result.rawResponse}

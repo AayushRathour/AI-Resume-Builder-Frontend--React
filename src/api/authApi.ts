@@ -1,7 +1,11 @@
 import api from './axios'
-import type { AuthResponse, RegisterRequest, LoginRequest, User, UpdateProfileRequest } from '../types'
+import type { AuthResponse, RegisterRequest, LoginRequest, User, UpdateProfileRequest, OtpResponse, OtpRequest, OtpVerifyRequest } from '../types'
 import { EP_ADMIN, EP_AUTH } from '../config/endpoints'
 
+/**
+ * Authentication and account API abstraction.
+ * Normalizes payload differences across auth, profile, admin, and OTP endpoints.
+ */
 type JwtPayload = {
   sub?: string
   userId?: number | string
@@ -28,7 +32,28 @@ function fallbackName(email?: string) {
   return email.split('@')[0]
 }
 
+function unwrapPayload<T>(payload: any): T {
+  return (payload && payload.data) ? payload.data as T : payload as T
+}
+
 async function normalizeAuthResponse(raw: Partial<AuthResponse>): Promise<AuthResponse> {
+  // If OTP is required, return early without fetching profile
+  if (raw.requiresOtp) {
+    return {
+      token: '',
+      email: raw.otpEmail || raw.email || '',
+      fullName: raw.userName || raw.fullName || '',
+      role: raw.role || 'USER',
+      subscriptionPlan: raw.subscriptionPlan || 'FREE',
+      userId: Number(raw.userId ?? 0),
+      requiresOtp: true,
+      otpEmail: raw.otpEmail || raw.email || '',
+      userName: raw.userName || raw.fullName || '',
+      otpPurpose: raw.otpPurpose || 'LOGIN',
+      rawOtp: raw.rawOtp,
+    }
+  }
+
   const token = raw.token ?? ''
   const claims = decodeJwtPayload(token)
 
@@ -56,14 +81,33 @@ async function normalizeAuthResponse(raw: Partial<AuthResponse>): Promise<AuthRe
 
 export const authApi = {
   register: async (data: RegisterRequest) => {
-    const raw = await api.post<Partial<AuthResponse>>(EP_AUTH.REGISTER, data).then(r => r.data)
+    const raw = await api.post<any>(EP_AUTH.REGISTER, data).then(r => unwrapPayload<Partial<AuthResponse>>(r.data))
     return normalizeAuthResponse(raw)
   },
 
   login: async (data: LoginRequest) => {
-    const raw = await api.post<Partial<AuthResponse>>(EP_AUTH.LOGIN, data).then(r => r.data)
+    const raw = await api.post<any>(EP_AUTH.LOGIN, data).then(r => unwrapPayload<Partial<AuthResponse>>(r.data))
     return normalizeAuthResponse(raw)
   },
+
+  // ── OTP Methods ─────────────────────────────────────────────
+
+  sendOtp: async (data: OtpRequest): Promise<OtpResponse> => {
+    const r = await api.post<any>(EP_AUTH.SEND_OTP, data)
+    return unwrapPayload<OtpResponse>(r.data)
+  },
+
+  verifyOtp: async (data: OtpVerifyRequest): Promise<OtpResponse> => {
+    const r = await api.post<any>(EP_AUTH.VERIFY_OTP, data)
+    return unwrapPayload<OtpResponse>(r.data)
+  },
+
+  resendOtp: async (data: OtpRequest): Promise<OtpResponse> => {
+    const r = await api.post<any>(EP_AUTH.RESEND_OTP, data)
+    return unwrapPayload<OtpResponse>(r.data)
+  },
+
+  // ── Existing Methods (Unchanged) ────────────────────────────
 
   getProfile: async () => {
     const r = await api.get(EP_AUTH.PROFILE)
@@ -75,6 +119,8 @@ export const authApi = {
       role: r.data?.role ?? 'USER',
       subscriptionPlan: r.data?.subscriptionPlan ?? 'FREE',
       isActive: r.data?.isActive ?? true,
+      isDeleted: r.data?.isDeleted ?? false,
+      deletedAt: r.data?.deletedAt ?? undefined,
       provider: r.data?.provider ?? 'LOCAL',
       createdAt: r.data?.createdAt ?? new Date().toISOString(),
     } as User
@@ -91,6 +137,8 @@ export const authApi = {
         role: profile.role ?? 'USER',
         subscriptionPlan: profile.subscriptionPlan ?? 'FREE',
         isActive: profile.isActive ?? true,
+        isDeleted: profile.isDeleted ?? false,
+        deletedAt: profile.deletedAt ?? undefined,
         provider: profile.provider ?? 'LOCAL',
         createdAt: profile.createdAt ?? new Date().toISOString(),
       } as User
@@ -108,6 +156,8 @@ export const authApi = {
       role: r.data?.role ?? 'USER',
       subscriptionPlan: r.data?.subscriptionPlan ?? plan ?? 'FREE',
       isActive: r.data?.isActive ?? true,
+      isDeleted: r.data?.isDeleted ?? false,
+      deletedAt: r.data?.deletedAt ?? undefined,
       provider: r.data?.provider ?? 'LOCAL',
       createdAt: r.data?.createdAt ?? new Date().toISOString(),
     } as User)),
@@ -121,6 +171,8 @@ export const authApi = {
       role: r.data?.role ?? 'USER',
       subscriptionPlan: r.data?.subscriptionPlan ?? plan ?? 'FREE',
       isActive: r.data?.isActive ?? true,
+      isDeleted: r.data?.isDeleted ?? false,
+      deletedAt: r.data?.deletedAt ?? undefined,
       provider: r.data?.provider ?? 'LOCAL',
       createdAt: r.data?.createdAt ?? new Date().toISOString(),
     } as User)),

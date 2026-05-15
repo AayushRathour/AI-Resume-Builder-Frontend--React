@@ -1,6 +1,7 @@
 import api from './axios'
 import type { ExportJob } from '../types'
 import { EP_EXPORT } from '../config/endpoints'
+import { API_BASE } from '../config/api'
 
 function normalizeStatus(rawStatus: string | undefined): ExportJob['status'] {
   const status = String(rawStatus ?? '').toUpperCase()
@@ -24,6 +25,14 @@ function toExportJob(raw: any, format: ExportJob['format'], resumeId: number, us
   }
 }
 
+function resolveBaseOrigin() {
+  try {
+    return new URL(API_BASE).origin
+  } catch {
+    return 'http://localhost:8080'
+  }
+}
+
 async function triggerExport(resumeId: number, userId: number, format: ExportJob['format'], templateId?: number | null) {
   const response = await api.post(
     EP_EXPORT.EXPORT(resumeId),
@@ -35,11 +44,6 @@ async function triggerExport(resumeId: number, userId: number, format: ExportJob
   )
 
   const job = toExportJob(response.data, format, resumeId, userId)
-
-  if (job.status === 'FAILED') {
-    const message = response.data?.message || 'Export failed'
-    throw new Error(message)
-  }
 
   // If export completed immediately, trigger download
   if (job.status === 'COMPLETED' && job.fileUrl) {
@@ -53,12 +57,14 @@ async function triggerDownload(fileUrl: string, filename: string) {
   // Use axios to download so the auth interceptor attaches the Bearer token.
   // A plain <a href> is a direct browser navigation — no Authorization header is sent,
   // which causes the gateway JwtAuthFilter to reject with 401 "Unauthorized".
-  const baseOrigin = import.meta.env.VITE_API_ORIGIN || 'http://localhost:8080'
+  const baseOrigin = resolveBaseOrigin()
 
   // fileUrl may be absolute or relative (e.g. /api/v1/export/file/{jobId})
-  const downloadUrl = fileUrl.startsWith('http')
-    ? fileUrl.replace(baseOrigin, '')  // make relative so it goes through our api baseURL
-    : fileUrl.replace(/^\/api\/v1/, '') // strip /api/v1 prefix since api instance already has it as baseURL
+  const rawPath = fileUrl.startsWith('http')
+    ? fileUrl.replace(baseOrigin, '') // make relative so it goes through our api baseURL
+    : fileUrl
+  const strippedApiPrefix = rawPath.replace(/^\/api\/v1\/?/, '')
+  const downloadUrl = strippedApiPrefix.replace(/^\/+/, '') // keep it relative so axios baseURL is used
 
   try {
     const response = await api.get(downloadUrl, { responseType: 'blob' })
@@ -97,6 +103,9 @@ export const exportApi = {
 
   getStats: (userId: number) =>
     api.get(EP_EXPORT.STATS(userId)).then(r => r.data),
+
+  downloadFile: (fileUrl: string, filename: string) =>
+    triggerDownload(fileUrl, filename),
 
   delete: (jobId: string) =>
     api.delete(EP_EXPORT.DELETE(jobId)),

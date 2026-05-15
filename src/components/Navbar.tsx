@@ -1,26 +1,20 @@
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { useQuery } from '@tanstack/react-query'
-import { notificationApi } from '../api/notificationApi'
+import { useNotifications } from '../context/NotificationContext'
 import { useState } from 'react'
-import { Bell, User, LogOut, Settings, ChevronDown, FileText, Star, Zap, Menu, X } from 'lucide-react'
+import { Bell, User, LogOut, Settings, ChevronDown, FileText, Star, Zap, Menu, X, Wifi, WifiOff } from 'lucide-react'
 import NotificationPanel from './NotificationPanel'
 
 export default function Navbar() {
   const { user, logout, isAdmin, isPremium } = useAuth()
-  const navigate = useNavigate()
   const [showNotifs, setShowNotifs] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
   const [showMobileNav, setShowMobileNav] = useState(false)
 
-  const { data: unreadCount = 0 } = useQuery({
-    queryKey: ['unread-count', user?.userId],
-    queryFn: () => notificationApi.getUnreadCount(user!.userId),
-    enabled: !!user,
-    refetchInterval: 30_000,
-  })
+  // Use real-time notification context instead of polling
+  const { unreadCount, connected } = useNotifications()
 
-  const handleLogout = () => { logout(); navigate('/') }
+  const handleLogout = () => { logout() }
 
   return (
     <nav className="bg-white border-b border-slate-200 sticky top-0 z-50">
@@ -66,16 +60,20 @@ export default function Navbar() {
 
           {user ? (
             <>
-              {/* Notifications */}
+              {/* Notifications Bell */}
               <div className="relative">
                 <button onClick={() => setShowNotifs(!showNotifs)}
-                  className="relative p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
+                  className="relative p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                  id="notification-bell-btn">
                   <Bell size={20} />
                   {unreadCount > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
-                      {unreadCount > 9 ? '9+' : unreadCount}
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold px-1 animate-pulse">
+                      {unreadCount > 99 ? '99+' : unreadCount}
                     </span>
                   )}
+                  {/* WebSocket connection indicator */}
+                  <span className={`absolute bottom-0 right-0 w-2 h-2 rounded-full border border-white ${connected ? 'bg-green-400' : 'bg-gray-300'}`}
+                    title={connected ? 'Real-time connected' : 'Connecting...'} />
                 </button>
                 {showNotifs && (
                   <NotificationPanel onClose={() => setShowNotifs(false)} />
@@ -98,6 +96,10 @@ export default function Navbar() {
                     <Link to="/profile" onClick={() => setShowMenu(false)}
                       className="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors">
                       <User size={14} /> Profile
+                    </Link>
+                    <Link to="/notifications" onClick={() => setShowMenu(false)}
+                      className="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors">
+                      <Bell size={14} /> Notification Center
                     </Link>
                     <Link to="/exports" onClick={() => setShowMenu(false)}
                       className="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors">
@@ -137,6 +139,7 @@ export default function Navbar() {
                 <Link to="/dashboard" onClick={() => setShowMobileNav(false)} className="block text-slate-600 hover:text-primary-600">Dashboard</Link>
                 <Link to="/job-match" onClick={() => setShowMobileNav(false)} className="block text-slate-600 hover:text-primary-600">Job Match</Link>
                 <Link to="/ats-check" onClick={() => setShowMobileNav(false)} className="block text-slate-600 hover:text-primary-600">ATS Check</Link>
+                <Link to="/notifications" onClick={() => setShowMobileNav(false)} className="block text-slate-600 hover:text-primary-600">Notifications</Link>
               </>
             )}
             {isAdmin && (

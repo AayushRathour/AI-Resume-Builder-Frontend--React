@@ -8,6 +8,10 @@ import Navbar from '../components/Navbar'
 import toast from 'react-hot-toast'
 import { Briefcase, Search, Bookmark, BookmarkCheck, Loader2, Target, MapPin, TrendingUp, ExternalLink, UploadCloud, FileText, SearchCheck, Sparkles, BadgeCheck, HardDriveDownload, CheckCircle2, Bot } from 'lucide-react'
 
+/**
+ * Job matching page for resume-to-job analysis workflows.
+ * Covers resume parsing, live search, saved jobs, and scored match results.
+ */
 type JobListing = {
   title?: string
   company?: string
@@ -51,6 +55,7 @@ export default function JobMatchPage() {
   const [analyzeLoading, setAnalyzeLoading] = useState(false)
   const [analysisStage, setAnalysisStage] = useState<'idle' | 'uploading' | 'extracting' | 'searching' | 'matching' | 'done' | 'error'>('idle')
   const [analysisResumeLabel, setAnalysisResumeLabel] = useState('')
+  const [noJobsReason, setNoJobsReason] = useState('')
 
   const { data: resumes = [] } = useQuery({
     queryKey: ['resumes', user?.userId],
@@ -70,6 +75,7 @@ export default function JobMatchPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['matches'] }),
   })
 
+  /** Builds compact search terms from manual input and extracted profile attributes. */
   const buildSearchQuery = (data: ExtractedData | null) => {
     const tokens = [
       jobTitle.trim(),
@@ -84,29 +90,26 @@ export default function JobMatchPage() {
   }
 
   const handleAnalyze = async () => {
-    if (!isPremium) { toast.error('Job matching requires Premium'); return }
+    // if (!isPremium) { toast.error('Job matching requires Premium'); return }
     if (!selectedResumeId && !uploadedFile) { toast.error('Select a resume or upload a PDF'); return }
     setAnalyzeLoading(true)
     setAnalysisStage('uploading')
+    setNoJobsReason('')
     setAnalysisResumeLabel(uploadedFile?.name ?? resumes.find((resume: Resume) => resume.resumeId === selectedResumeId)?.title ?? 'Selected resume')
     setExtractedData(null)
     try {
-      console.log('Starting job analysis')
       const formData = new FormData()
       if (uploadedFile) {
         formData.append('file', uploadedFile)
-        console.log('File attached:', uploadedFile.name)
       }
       if (selectedResumeId) {
         formData.append('resumeId', selectedResumeId.toString())
-        console.log('Resume selected:', selectedResumeId)
       }
       if (user) formData.append('userId', user.userId.toString())
       if (jobTitle.trim()) formData.append('jobTitle', jobTitle.trim())
       if (location) formData.append('location', location)
 
       setAnalysisStage('extracting')
-      console.log('Sending request to backend')
       const response = await jobMatchApi.analyzeWithFile(formData)
       const nextExtractedData = response?.extractedData ?? null
       setExtractedData(nextExtractedData)
@@ -114,16 +117,21 @@ export default function JobMatchPage() {
 
       const searchQuery = buildSearchQuery(nextExtractedData)
       const backendJobs = Array.isArray(response?.jobs) ? response.jobs : []
-      const searchJobs = await jobMatchApi.search(searchQuery || jobTitle.trim() || 'software developer')
+      const searchJobs = await jobMatchApi.search(
+        searchQuery || jobTitle.trim() || 'software developer',
+        location
+      )
       const nextJobs = searchJobs.length > 0 ? searchJobs : backendJobs
 
       setAnalysisStage('matching')
       setJobs(nextJobs)
       if (nextJobs.length > 0) setSavedJobs(nextJobs)
-      console.log('Backend response received:', nextJobs.length, 'jobs')
 
       setAnalysisStage('done')
       qc.invalidateQueries({ queryKey: ['matches'] })
+      if (nextJobs.length === 0) {
+        setNoJobsReason('No jobs matched from external providers or fallback pool for this query right now. Try a broader title (for example "Software Developer") or remove location.')
+      }
       toast.success(`Analysis complete. Found ${nextJobs.length || '0'} jobs.`)
     } catch (e: any) {
       setAnalysisStage('error')
@@ -143,11 +151,11 @@ export default function JobMatchPage() {
   }
 
   const handleFetchJobs = async () => {
-    if (!isPremium) { toast.error('Live job search requires Premium', { id: 'job-premium' }); return }
+    // if (!isPremium) { toast.error('Live job search requires Premium', { id: 'job-premium' }); return }
     setLiveInitialized(true)
     setLiveLoading(true)
     try {
-      const nextJobs = await jobMatchApi.search(jobTitle.trim() || 'software developer')
+      const nextJobs = await jobMatchApi.search(jobTitle.trim() || 'software developer', location)
       setJobs(nextJobs)
       if (nextJobs.length > 0) setSavedJobs(nextJobs)
       if (nextJobs.length === 0) toast('No jobs found. Try different search terms.')
@@ -351,6 +359,12 @@ export default function JobMatchPage() {
                 {analysisStage === 'done' && (
                   <div className="rounded-md bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-700 flex items-center gap-2">
                     <CheckCircle2 size={14} /> Resume analysis done. Starting job search results below.
+                  </div>
+                )}
+                {analysisStage === 'done' && jobs.length === 0 && noJobsReason && (
+                  <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">
+                    <p className="font-medium">No matching jobs found yet.</p>
+                    <p className="mt-1">{noJobsReason}</p>
                   </div>
                 )}
               </div>

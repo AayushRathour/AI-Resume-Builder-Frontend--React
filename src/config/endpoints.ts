@@ -8,12 +8,16 @@ export const EP_AUTH = {
   UPDATE_PASSWORD: '/auth/password',
   UPDATE_SUBSCRIPTION: '/auth/subscription',
   DEACTIVATE: '/auth/deactivate',
+  SEND_OTP: '/auth/send-otp',
+  VERIFY_OTP: '/auth/verify-otp',
+  RESEND_OTP: '/auth/resend-otp',
 } as const
 
 export const EP_ADMIN = {
   USERS: '/admin/users',
   UPGRADE_USER: (userId: number) => `/admin/users/${userId}/upgrade`,
   SUSPEND_USER: (userId: number) => `/admin/users/${userId}/suspend`,
+  RESTORE_USER: (userId: number) => `/admin/users/${userId}/restore`,
   UPDATE_SUBSCRIPTION: (userId: number) => `/admin/users/${userId}/subscription`,
   DELETE_USER: (userId: number) => `/admin/users/${userId}`,
   TEMPLATES: '/admin/templates',
@@ -40,6 +44,7 @@ export const EP_RESUME = {
   PUBLISH: (id: number) => `/resumes/${id}/publish`,
   UNPUBLISH: (id: number) => `/resumes/${id}/unpublish`,
   UPDATE_ATS_SCORE: (id: number) => `/resumes/${id}/ats-score`,
+  BACKFILL_ATS: (userId: number) => `/resumes/user/${userId}/ats-score/backfill`,
   INCREMENT_VIEW: (id: number) => `/resumes/${id}/increment-view`,
 } as const
 
@@ -75,6 +80,7 @@ export const EP_AI = {
   SUGGEST_SKILLS: '/ai/skills',
   TAILOR_FOR_JOB: '/ai/tailor',
   TRANSLATE: '/ai/translate',
+  CHAT: '/ai/chat',
   HISTORY: (userId: number) => `/ai/history/${userId}`,
   QUOTA: (userId: number) => `/ai/quota/${userId}`,
 } as const

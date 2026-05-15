@@ -10,6 +10,8 @@ export default function QuotaBadge() {
     queryKey: ['quota', user?.userId],
     queryFn: () => aiApi.getQuota(user!.userId),
     enabled: !!user && !isPremium,
+    refetchOnWindowFocus: true,
+    refetchInterval: 30_000,
   })
 
   if (isPremium) return (
@@ -20,28 +22,39 @@ export default function QuotaBadge() {
 
   if (!data) return null
 
-  const contentPct = (data.contentRemaining / 5) * 100
-  const atsPct = (data.atsRemaining / 3) * 100
+  const safePercent = (value: number, total: number) => {
+    if (!total || total <= 0) return 0
+    return Math.max(0, Math.min(100, (value / total) * 100))
+  }
+
+  const contentPct = safePercent(data.contentRemaining, data.contentAllowed)
+  const atsPct = safePercent(data.atsRemaining, data.atsAllowed)
 
   return (
-    <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs space-y-2">
-      <p className="font-semibold text-slate-600">Monthly AI Quota</p>
-      <div>
-        <div className="flex justify-between text-slate-500 mb-1">
+    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs space-y-3 overflow-hidden">
+      <p className="font-semibold text-slate-700 text-sm">Monthly AI Quota</p>
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between gap-3 text-slate-600">
           <span>AI Calls</span>
-          <span>{data.contentRemaining}/5 left</span>
+          <span className="font-medium">{data.contentRemaining}/{data.contentAllowed} left</span>
         </div>
-        <div className="h-1.5 bg-slate-200 rounded-full">
-          <div className="h-full bg-primary-500 rounded-full" style={{ width: `${contentPct}%` }} />
+        <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-primary-500 rounded-full transition-all duration-300"
+            style={{ width: `${contentPct}%` }}
+          />
         </div>
       </div>
-      <div>
-        <div className="flex justify-between text-slate-500 mb-1">
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between gap-3 text-slate-600">
           <span>ATS Checks</span>
-          <span>{data.atsRemaining}/3 left</span>
+          <span className="font-medium">{data.atsRemaining}/{data.atsAllowed} left</span>
         </div>
-        <div className="h-1.5 bg-slate-200 rounded-full">
-          <div className="h-full bg-blue-500 rounded-full" style={{ width: `${atsPct}%` }} />
+        <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-blue-500 rounded-full transition-all duration-300"
+            style={{ width: `${atsPct}%` }}
+          />
         </div>
       </div>
     </div>

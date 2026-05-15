@@ -5,6 +5,7 @@ import type { ExportJob } from '../types'
 import Navbar from '../components/Navbar'
 import toast from 'react-hot-toast'
 import { Download, Trash2, Clock, CheckCircle2, XCircle, Loader2, FileText } from 'lucide-react'
+import { useState } from 'react'
 
 const statusIcon = {
   COMPLETED: <CheckCircle2 size={14} className="text-green-500" />,
@@ -16,6 +17,7 @@ const statusIcon = {
 export default function ExportHistoryPage() {
   const { user } = useAuth()
   const qc = useQueryClient()
+  const [downloadingJobId, setDownloadingJobId] = useState<string | null>(null)
 
   const { data: exports = [], isLoading } = useQuery({
     queryKey: ['exports', user?.userId],
@@ -28,6 +30,18 @@ export default function ExportHistoryPage() {
     mutationFn: (jobId: string) => exportApi.delete(jobId),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['exports'] }); toast.success('Export deleted') },
   })
+
+  const handleDownload = async (job: ExportJob) => {
+    if (!job.fileUrl) return
+    setDownloadingJobId(job.jobId)
+    try {
+      await exportApi.downloadFile(job.fileUrl, `resume_${job.resumeId}.${job.format.toLowerCase()}`)
+    } catch {
+      toast.error('Download failed')
+    } finally {
+      setDownloadingJobId(null)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -75,10 +89,14 @@ export default function ExportHistoryPage() {
                     </div>
 
                     {job.status === 'COMPLETED' && job.fileUrl && (
-                      <a href={job.fileUrl} target="_blank" rel="noreferrer"
-                        className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1">
-                        <Download size={12} /> Download
-                      </a>
+                      <button
+                        onClick={() => handleDownload(job)}
+                        disabled={downloadingJobId === job.jobId}
+                        className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1 disabled:opacity-60"
+                      >
+                        {downloadingJobId === job.jobId ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+                        Download
+                      </button>
                     )}
 
                     <button onClick={() => { if(confirm('Delete this export?')) deleteExport.mutate(job.jobId) }}

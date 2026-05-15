@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import toast from 'react-hot-toast'
 import { FileText, Eye, EyeOff, CheckCircle2 } from 'lucide-react'
 import { OAUTH_BASE } from '../config/api'
+import { sendOtpEmail } from '../api/emailService'
 
 export default function RegisterPage() {
   const navigate = useNavigate()
@@ -16,7 +17,45 @@ export default function RegisterPage() {
 
   const mutation = useMutation({
     mutationFn: authApi.register,
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
+      // Check if OTP verification is required
+      if (data.requiresOtp) {
+        const targetEmail = data.otpEmail || data.email
+        const targetName = data.userName || data.fullName || 'User'
+
+        if (!targetEmail) {
+          toast.error('Could not start OTP verification. Please try again.')
+          return
+        }
+
+        if (data.rawOtp) {
+          const sent = await sendOtpEmail({
+            email: targetEmail,
+            name: targetName,
+            otp: data.rawOtp,
+          })
+
+          if (!sent) {
+            toast.error('Failed to send verification email automatically. Use resend on the OTP page.')
+          } else {
+            toast.success('Verification code sent to your email!')
+          }
+        } else {
+          toast.error('Verification code could not be sent automatically. Use resend on the OTP page.')
+        }
+
+        navigate('/verify-otp', {
+          state: {
+            email: targetEmail,
+            name: targetName,
+            purpose: data.otpPurpose || 'REGISTER',
+          },
+          replace: true,
+        })
+        return
+      }
+
+      // Normal register (fallback if OTP is disabled)
       login(data)
       toast.success('Account created! Welcome to ResumeAI')
       navigate('/dashboard')

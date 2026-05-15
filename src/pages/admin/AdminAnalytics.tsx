@@ -10,7 +10,9 @@ export default function AdminAnalytics() {
 
   const freeCount = users.filter((u: any) => u.subscriptionPlan === "FREE").length
   const premiumCount = users.filter((u: any) => u.subscriptionPlan === "PREMIUM").length
-  const activeCount = users.filter((u: any) => u.isActive).length
+  const deletedCount = users.filter((u: any) => u.isDeleted).length
+  const suspendedCount = users.filter((u: any) => !u.isDeleted && !u.isActive).length
+  const activeCount = users.filter((u: any) => !u.isDeleted && u.isActive).length
   const conversionRate = users.length > 0 ? ((premiumCount / users.length) * 100).toFixed(1) : "0"
 
   const topTemplates = [...templates].sort((a: any, b: any) => b.usageCount - a.usageCount).slice(0, 5)
@@ -44,7 +46,8 @@ export default function AdminAnalytics() {
             { label: "Free", count: freeCount, total: users.length, color: "bg-slate-400" },
             { label: "Premium", count: premiumCount, total: users.length, color: "bg-amber-500" },
             { label: "Active", count: activeCount, total: users.length, color: "bg-green-500" },
-            { label: "Inactive", count: users.length - activeCount, total: users.length, color: "bg-red-400" },
+            { label: "Suspended", count: suspendedCount, total: users.length, color: "bg-red-400" },
+            { label: "Deleted", count: deletedCount, total: users.length, color: "bg-slate-500" },
           ].map(({ label, count, total, color }) => {
             const pct = total > 0 ? Math.round((count / total) * 100) : 0
             return (
@@ -101,6 +104,10 @@ export default function AdminAnalytics() {
               </thead>
               <tbody>
                 {users.map((u: any, i: number) => (
+                  (() => {
+                    const statusLabel = u.isDeleted ? "Deleted" : u.isActive ? "Active" : "Suspended"
+                    const statusClass = u.isDeleted ? "text-slate-500" : u.isActive ? "text-green-600" : "text-red-500"
+                    return (
                   <tr key={u.userId} className="border-b border-slate-50 hover:bg-slate-50">
                     <td className="py-2 text-slate-400 text-xs">{i + 1}</td>
                     <td className="py-2 font-medium text-slate-700">{u.fullName}</td>
@@ -111,13 +118,15 @@ export default function AdminAnalytics() {
                       </span>
                     </td>
                     <td className="py-2">
-                      <span className={`text-xs font-medium ${u.isActive ? "text-green-600" : "text-red-500"}`}>
-                        {u.isActive ? "Active" : "Inactive"}
+                      <span className={`text-xs font-medium ${statusClass}`}>
+                        {statusLabel}
                       </span>
                     </td>
                     <td className="py-2 text-slate-400 text-xs capitalize">{u.provider?.toLowerCase()}</td>
                     <td className="py-2 text-slate-400 text-xs">{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "—"}</td>
                   </tr>
+                    )
+                  })()
                 ))}
               </tbody>
             </table>

@@ -2,6 +2,10 @@ import useResumeStore from '../../store/useResumeStore'
 import { Plus, Trash2, GraduationCap, ChevronDown, ChevronUp, GripVertical } from 'lucide-react'
 import { useState } from 'react'
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd'
+import AiButton from './AiButton'
+import { aiApi } from '../../api/aiApi'
+import { useAuth } from '../../context/AuthContext'
+import toast from 'react-hot-toast'
 
 export default function EducationStep() {
   const education = useResumeStore((s) => s.data.education)
@@ -10,6 +14,7 @@ export default function EducationStep() {
   const removeEducation = useResumeStore((s) => s.removeEducation)
   const reorderEducation = useResumeStore((s) => s.reorderEducation)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  const { user } = useAuth()
 
   const toggle = (id: string) => setCollapsed(c => ({ ...c, [id]: !c[id] }))
 
@@ -17,6 +22,26 @@ export default function EducationStep() {
     if (!result.destination) return
     if (result.destination.index === result.source.index) return
     reorderEducation(result.source.index, result.destination.index)
+  }
+
+  const handleImproveEducation = async (id: string) => {
+    if (!user) {
+      toast.error('Please log in to use AI features')
+      return
+    }
+    const edu = education.find(e => e.id === id)
+    if (!edu || !edu.description.trim()) {
+      toast.error('Write some description first, then improve it')
+      return
+    }
+
+    const result = await aiApi.improveSection(user.userId, 'free', 'education', edu.description)
+    if (result && result !== edu.description && result !== 'AI TEMPORARILY UNAVAILABLE') {
+      updateEducation(id, 'description', result)
+      toast.success('Description improved!')
+    } else {
+      throw new Error('AI could not improve the description.')
+    }
   }
 
   return (
@@ -137,7 +162,10 @@ export default function EducationStep() {
                               </div>
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-slate-600 mb-1">Description / Achievements</label>
+                              <div className="flex items-center justify-between mb-1.5">
+                                <label className="block text-xs font-medium text-slate-600">Description / Achievements</label>
+                                <AiButton label="Improve" onClick={() => handleImproveEducation(edu.id)} disabled={!edu.description.trim()} />
+                              </div>
                               <textarea
                                 value={edu.description}
                                 onChange={(e) => updateEducation(edu.id, 'description', e.target.value)}

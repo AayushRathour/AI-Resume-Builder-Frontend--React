@@ -29,9 +29,9 @@ export const jobMatchApi = {
     formData.append('resumeId', resumeId.toString())
     if (jobTitle?.trim()) formData.append('jobTitle', jobTitle.trim())
     if (location?.trim()) formData.append('location', location.trim())
-    console.log('📤 [ANALYZE] Request - userId:', userId, 'resumeId:', resumeId, 'jobTitle:', jobTitle)
     return api.post(EP_JOB_MATCH.ANALYZE, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 240000, // AI analysis can take longer when provider fallback is used
     }).then(r => {
       const payload = r.data ?? {}
       if (payload.status === 'failed') {
@@ -45,9 +45,9 @@ export const jobMatchApi = {
   },
 
   analyzeWithFile: (formData: FormData) => {
-    console.log('📤 [ANALYZE-FILE] Request - File analysis starting...')
     return api.post(EP_JOB_MATCH.ANALYZE, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 240000, // AI analysis can take longer when provider fallback is used
     }).then(r => {
       const payload = r.data ?? {}
       if (payload.status === 'failed') {
@@ -61,7 +61,6 @@ export const jobMatchApi = {
   },
 
   getByResume: (resumeId: number) => {
-    console.log('📥 [GET-RESUME] Request - resumeId:', resumeId)
     return api.get(EP_JOB_MATCH.BY_RESUME(resumeId)).then(r => {
       if (!r.data || !Array.isArray(r.data)) { console.warn('[GET-RESUME] Invalid response'); return [] }
       return r.data.map((item: any) => toMatchModel(item))
@@ -69,7 +68,6 @@ export const jobMatchApi = {
   },
 
   getByUser: (userId: number) => {
-    console.log('📥 [GET-USER] Request - userId:', userId)
     return api.get(EP_JOB_MATCH.JOBS, { params: { userId } }).then(r => {
       if (!r.data || !Array.isArray(r.data)) { console.warn('[GET-USER] Invalid response'); return [] }
       return r.data.map((item: any) => toMatchModel(item))
@@ -77,16 +75,14 @@ export const jobMatchApi = {
   },
 
   getTopMatches: (userId: number, limit = 20) => {
-    console.log('📥 [GET-TOP] Request - userId:', userId, 'limit:', limit)
     return api.get(EP_JOB_MATCH.TOP, { params: { userId, limit } }).then(r => {
       if (!r.data || !Array.isArray(r.data)) { console.warn('[GET-TOP] Invalid response'); return [] }
-      console.log('✓ [GET-TOP] Response - matches:', r.data.length)
       return r.data.map((item: any) => toMatchModel(item))
     }).catch(err => { console.error('[GET-TOP] Failed:', err.message); return [] })
   },
 
-  search: (query: string) =>
-    api.get(EP_JOB_MATCH.SEARCH, { params: { query } }).then(r => r.data ?? []),
+  search: (query: string, location?: string) =>
+    api.get(EP_JOB_MATCH.SEARCH, { params: { query, location } }).then(r => r.data ?? []),
 
   getSavedJobs: () =>
     api.get(EP_JOB_MATCH.SAVED_JOBS).then(r => r.data ?? []),

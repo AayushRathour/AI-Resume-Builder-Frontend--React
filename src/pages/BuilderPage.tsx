@@ -1,12 +1,13 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../context/AuthContext'
 import { resumeApi } from '../api/resumeApi'
+import { sectionApi } from '../api/sectionApi'
 import { templateApi } from '../api/templateApi'
 import { exportApi } from '../api/exportApi'
-import type { Resume, ResumeTemplate } from '../types'
-import useResumeStore, { STEPS } from '../store/useResumeStore'
+import type { Resume, ResumeSection, ResumeTemplate } from '../types'
+import useResumeStore, { STEPS, type ResumeData } from '../store/useResumeStore'
 import MainLayout from '../components/layout/MainLayout'
 import toast from 'react-hot-toast'
 import { Download, Loader2, Globe, Lock, Save } from 'lucide-react'
@@ -22,6 +23,121 @@ import SkillsStep from '../components/builder/SkillsStep'
 import ExperienceStep from '../components/builder/ExperienceStep'
 import EducationStep from '../components/builder/EducationStep'
 import ProjectsStep from '../components/builder/ProjectsStep'
+
+/**
+ * Resume Builder page used for creating and editing resumes.
+ * Supports live preview, step-based editing, template switching,
+ * section persistence, publish toggles, and PDF export workflow.
+ */
+function toJson(value: unknown) {
+  try {
+    return JSON.stringify(value ?? null)
+  } catch {
+    return ''
+  }
+}
+
+function parseJson<T>(value: string | undefined, fallback: T): T {
+  if (!value) return fallback
+  try {
+    return JSON.parse(value) as T
+  } catch {
+    return fallback
+  }
+}
+
+function buildSectionDrafts(resumeId: number, data: ResumeData): Partial<ResumeSection>[] {
+  return [
+    {
+      resumeId,
+      sectionType: 'CUSTOM',
+      title: 'Personal Info',
+      content: toJson(data.personal),
+      displayOrder: 1,
+      isVisible: true,
+      aiGenerated: false,
+    },
+    {
+      resumeId,
+      sectionType: 'SUMMARY',
+      title: 'Summary',
+      content: data.summary || '',
+      displayOrder: 2,
+      isVisible: true,
+      aiGenerated: false,
+    },
+    {
+      resumeId,
+      sectionType: 'SKILLS',
+      title: 'Skills',
+      content: toJson(data.skills),
+      displayOrder: 3,
+      isVisible: true,
+      aiGenerated: false,
+    },
+    {
+      resumeId,
+      sectionType: 'EXPERIENCE',
+      title: 'Experience',
+      content: toJson(data.experience),
+      displayOrder: 4,
+      isVisible: true,
+      aiGenerated: false,
+    },
+    {
+      resumeId,
+      sectionType: 'EDUCATION',
+      title: 'Education',
+      content: toJson(data.education),
+      displayOrder: 5,
+      isVisible: true,
+      aiGenerated: false,
+    },
+    {
+      resumeId,
+      sectionType: 'PROJECTS',
+      title: 'Projects',
+      content: toJson(data.projects),
+      displayOrder: 6,
+      isVisible: true,
+      aiGenerated: false,
+    },
+  ]
+}
+
+/** Converts section rows to canonical `sectionsJson` format used by preview and persistence. */
+function sectionsToResumeJson(sections: ResumeSection[]) {
+  const visibleSections = [...sections]
+    .filter(section => section.isVisible !== false)
+    .sort((a, b) => a.displayOrder - b.displayOrder)
+
+  const firstCustom = visibleSections.find(section => section.sectionType === 'CUSTOM')
+  const personal = parseJson(firstCustom?.content, {
+    name: '',
+    email: '',
+    phone: '',
+    location: '',
+    linkedin: '',
+    github: '',
+    website: '',
+    title: '',
+  })
+
+  const summarySection = visibleSections.find(section => section.sectionType === 'SUMMARY')
+  const skillsSection = visibleSections.find(section => section.sectionType === 'SKILLS')
+  const experienceSection = visibleSections.find(section => section.sectionType === 'EXPERIENCE')
+  const educationSection = visibleSections.find(section => section.sectionType === 'EDUCATION')
+  const projectsSection = visibleSections.find(section => section.sectionType === 'PROJECTS')
+
+  return JSON.stringify({
+    personal,
+    summary: summarySection?.content ?? '',
+    skills: parseJson<string[]>(skillsSection?.content, []),
+    experience: parseJson<any[]>(experienceSection?.content, []),
+    education: parseJson<any[]>(educationSection?.content, []),
+    projects: parseJson<any[]>(projectsSection?.content, []),
+  })
+}
 
 // ── Step renderer ────────────────────────────────────────────────────────
 
@@ -57,6 +173,8 @@ export default function BuilderPage() {
   const storeTemplateId = useResumeStore((s) => s.templateId)
   const resumeTitle = useResumeStore((s) => s.resumeTitle)
   const targetJobTitle = useResumeStore((s) => s.targetJobTitle)
+  const lastLoadedKeyRef = useRef<string | null>(null)
+  const lastNewInitKeyRef = useRef<string | null>(null)
 
   // ── Data fetching ────────────────────────────────────────────────────
 
@@ -65,6 +183,14 @@ export default function BuilderPage() {
     queryKey: ['resume', resumeId],
     queryFn: () => resumeApi.getById(Number(resumeId)),
     enabled: !isNew && !!resumeId,
+  })
+
+  const { data: resumeSections = [] } = useQuery({
+    queryKey: ['resume-sections', resumeId],
+    queryFn: () => sectionApi.getByResume(Number(resumeId)),
+    enabled: !isNew && !!resumeId && !!resume && !resume.sectionsJson,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
   })
 
   // Determine which template to fetch
@@ -81,54 +207,50 @@ export default function BuilderPage() {
 
   useEffect(() => {
     if (resume && !isNew) {
+      const loadedKey = `${resume.resumeId}:${resume.updatedAt ?? ''}:${resume.sectionsJson ?? ''}:${resumeSections.length}`
+      if (lastLoadedKeyRef.current === loadedKey) return
+      lastLoadedKeyRef.current = loadedKey
+
+      const fallbackSectionsJson = !resume.sectionsJson && resumeSections.length > 0
+        ? sectionsToResumeJson(resumeSections as ResumeSection[])
+        : resume.sectionsJson
+
       store.loadFromResume({
         resumeId: resume.resumeId,
         title: resume.title,
         targetJobTitle: resume.targetJobTitle,
         templateId: resume.templateId,
-        sectionsJson: resume.sectionsJson,
+        sectionsJson: fallbackSectionsJson,
       })
-    } else if (isNew) {
+      return
+    }
+
+    if (isNew) {
+      const newInitKey = `new:${urlTemplateId ?? 'none'}`
+      if (lastNewInitKeyRef.current === newInitKey) return
+      lastNewInitKeyRef.current = newInitKey
+
       store.reset()
       if (urlTemplateId) {
         store.setTemplateId(urlTemplateId)
       }
     }
-    // Only run when resume data changes or on mount for new
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resume, isNew])
+  }, [resume, isNew, resumeSections.length, urlTemplateId])
 
   // ── Save mutation ────────────────────────────────────────────────────
 
+  /** Builds a backend-compatible payload from current Zustand state. */
   const buildSavePayload = () => {
     const state = useResumeStore.getState()
-    const personalName = state.data.personal.name?.trim()
-    const personalTitle = state.data.personal.title?.trim()
-    const resumeTitleInput = state.resumeTitle?.trim()
-    const targetJobTitleInput = state.targetJobTitle?.trim()
-    const resolvedResumeTitle = resumeTitleInput && resumeTitleInput !== 'Untitled Resume'
-      ? resumeTitleInput
-      : (personalName || 'Untitled Resume')
-    const resolvedTargetJobTitle = targetJobTitleInput && targetJobTitleInput !== 'No Title'
-      ? targetJobTitleInput
-      : (personalTitle || 'No Title')
     const payload = {
-      name: personalName || resolvedResumeTitle,
-      title: resolvedResumeTitle,
-      email: state.data.personal.email || undefined,
-      phone: state.data.personal.phone || undefined,
-      location: state.data.personal.location || undefined,
-      targetJobTitle: resolvedTargetJobTitle,
+      title: state.resumeTitle || 'My Resume',
+      targetJobTitle: state.targetJobTitle || 'General Role',
       templateId: state.templateId ?? null,
       language: 'English',
-      summary: state.data.summary || undefined,
-      skills: JSON.stringify(state.data.skills ?? []),
-      experience: JSON.stringify(state.data.experience ?? []),
-      education: JSON.stringify(state.data.education ?? []),
-      projects: JSON.stringify(state.data.projects ?? []),
       sectionsJson: state.toSectionsJson(),
     }
-    console.log('SAVING:', payload)
+    console.log('SAVING DATA:', payload)
     return payload
   }
 
@@ -140,9 +262,20 @@ export default function BuilderPage() {
       }
       return resumeApi.update(Number(resumeId), payload as any)
     },
-    onSuccess: (savedResume: Resume) => {
+    onSuccess: async (savedResume: Resume) => {
+      try {
+        const state = useResumeStore.getState()
+        const sectionDrafts = buildSectionDrafts(savedResume.resumeId, state.data)
+        await sectionApi.deleteAll(savedResume.resumeId)
+        await Promise.all(sectionDrafts.map((section) => sectionApi.add(section)))
+      } catch (error) {
+        console.warn('Section sync failed:', error)
+        toast.error('Resume saved, but section sync failed. Please save once more.')
+      }
+
       toast.success(isNew ? 'Resume created!' : 'Resume saved!')
       qc.invalidateQueries({ queryKey: ['resume', String(savedResume.resumeId)] })
+      qc.invalidateQueries({ queryKey: ['resume-sections', String(savedResume.resumeId)] })
       if (isNew) {
         store.setResumeId(savedResume.resumeId)
         navigate(`/builder/${savedResume.resumeId}`, { replace: true })
@@ -174,8 +307,11 @@ export default function BuilderPage() {
       await exportApi.exportPdf(exportResumeId, user!.userId, exportTemplateId)
       toast.success('PDF generated! Check your downloads.', { id: 'pdf' })
     } catch (err: any) {
-      const message = err?.response?.data?.message || err?.message || 'Export failed.'
-      toast.error(message, { id: 'pdf' })
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        'Export failed.'
+      toast.error(msg, { id: 'pdf' })
     }
   }
 

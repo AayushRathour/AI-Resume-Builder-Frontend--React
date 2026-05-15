@@ -3,19 +3,10 @@ import type { Resume } from '../types'
 import { EP_RESUME } from '../config/endpoints'
 
 type ResumePayload = {
-  name?: string
   title: string
-  email?: string
-  phone?: string
-  location?: string
   targetJobTitle: string
   templateId: number | null
   language: string
-  summary?: string
-  skills?: string
-  experience?: string
-  education?: string
-  projects?: string
   sectionsJson: string
 }
 
@@ -31,40 +22,27 @@ function toResumePayload(data: Partial<Resume>, current?: Partial<Resume>): Resu
     : null
 
   return {
-    name: data.name ?? current?.name,
     title: cleanOrDefault(data.title ?? current?.title, 'Untitled Resume'),
-    email: data.email ?? current?.email,
-    phone: data.phone ?? current?.phone,
-    location: data.location ?? current?.location,
-    targetJobTitle: cleanOrDefault(data.targetJobTitle ?? current?.targetJobTitle, 'No Title'),
+    targetJobTitle: cleanOrDefault(data.targetJobTitle ?? current?.targetJobTitle, 'General Role'),
     templateId: normalizedTemplateId,
     language: cleanOrDefault(data.language ?? current?.language, 'English'),
-    summary: data.summary ?? current?.summary,
-    skills: data.skills ?? current?.skills,
-    experience: data.experience ?? current?.experience,
-    education: data.education ?? current?.education,
-    projects: data.projects ?? current?.projects,
     sectionsJson: (data as any).sectionsJson ?? (current as any)?.sectionsJson ?? '',
   }
 }
 
 function toResumeModel(raw: any, fallbackUserId?: number): Resume {
+  const parsedAtsScore =
+    raw.atsScore === null || raw.atsScore === undefined || raw.atsScore === ''
+      ? null
+      : Number(raw.atsScore)
+
   return {
     resumeId: Number(raw.resumeId),
     userId: Number(raw.userId ?? fallbackUserId ?? 0),
-    name: raw.name ?? undefined,
     title: raw.title ?? 'Untitled Resume',
-    email: raw.email ?? undefined,
-    phone: raw.phone ?? undefined,
-    location: raw.location ?? undefined,
     targetJobTitle: raw.targetJobTitle ?? '',
     templateId: raw.templateId != null ? Number(raw.templateId) : undefined,
-    summary: raw.summary ?? undefined,
-    skills: raw.skills ?? undefined,
-    experience: raw.experience ?? undefined,
-    education: raw.education ?? undefined,
-    projects: raw.projects ?? undefined,
-    atsScore: Number(raw.atsScore ?? 0),
+    atsScore: Number.isFinite(parsedAtsScore as number) ? (parsedAtsScore as number) : null,
     status: (raw.status ?? 'DRAFT') as 'DRAFT' | 'COMPLETE',
     language: raw.language ?? 'English',
     sectionsJson: raw.sectionsJson ?? '',
@@ -78,7 +56,7 @@ function toResumeModel(raw: any, fallbackUserId?: number): Resume {
 export const resumeApi = {
   create: async (data: Partial<Resume>) => {
     const payload = toResumePayload(data)
-    const response = await api.post(EP_RESUME.SAVE, payload)
+    const response = await api.post(EP_RESUME.CREATE, payload)
     return toResumeModel(response.data)
   },
 
@@ -131,6 +109,9 @@ export const resumeApi = {
 
   updateAtsScore: (id: number, score: number) =>
     api.put(EP_RESUME.UPDATE_ATS_SCORE(id), undefined, { params: { score } }),
+
+  backfillAtsScores: (userId: number, limit = 10) =>
+    api.post(EP_RESUME.BACKFILL_ATS(userId), undefined, { params: { limit } }).then(r => r.data),
 
   incrementView: (id: number) =>
     api.put(EP_RESUME.INCREMENT_VIEW(id)),

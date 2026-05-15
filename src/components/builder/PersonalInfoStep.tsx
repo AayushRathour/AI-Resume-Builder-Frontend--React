@@ -6,6 +6,10 @@ import { User, Mail, Phone, MapPin, Linkedin, Github, Globe, Briefcase, AlertCir
 
 // ── Field config ─────────────────────────────────────────────────────────
 
+/**
+ * Personal information step for core resume identity details.
+ * Includes inline validation for contact and profile fields.
+ */
 interface FieldConfig {
   key: keyof PersonalInfo
   label: string

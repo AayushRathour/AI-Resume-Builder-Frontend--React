@@ -13,8 +13,8 @@ const features = [
 ]
 
 const plans = [
-  { name: 'Free', price: '₹0', features: ['3 resumes', '5 AI calls/month', '3 ATS checks/month', 'PDF export', 'Free templates', 'Public gallery'], cta: 'Get Started Free', href: '/register', highlight: false },
-  { name: 'Premium', price: '₹999/mo', features: ['Unlimited resumes', 'Unlimited AI calls', 'Cover letter AI', 'Tailor resume to jobs', 'DOCX + JSON export', 'Premium templates', 'Job matching (LinkedIn + Naukri)', 'AI request history', 'Language translation'], cta: 'Start Premium', href: '/pricing', highlight: true },
+  { name: 'Free', price: '₹0', features: ['3 resumes', '5 AI calls/month', '5 ATS checks/month', 'PDF export', 'Free templates', 'Public gallery'], cta: 'Get Started Free', href: '/register', highlight: false },
+  { name: 'Premium', price: '₹599/mo', features: ['Unlimited resumes', 'Unlimited AI calls', 'Cover letter AI', 'Tailor resume to jobs', 'DOCX + JSON export', 'Premium templates', 'Job matching (LinkedIn + Naukri)', 'AI request history', 'Language translation'], cta: 'Start Premium', href: '/pricing', highlight: true },
 ]
 
 export default function LandingPage() {

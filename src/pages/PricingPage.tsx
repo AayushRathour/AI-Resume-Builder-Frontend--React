@@ -5,13 +5,14 @@ import { paymentApi } from '../api/paymentApi'
 import Navbar from '../components/Navbar'
 import toast from 'react-hot-toast'
 import { CheckCircle2, Zap, Shield, Sparkles } from 'lucide-react'
+import { RAZORPAY_KEY_ID } from '../config/api'
 
 export default function PricingPage() {
   const { user, isPremium, login } = useAuth()
   const navigate = useNavigate()
   const [isPaying, setIsPaying] = useState(false)
 
-  const razorpayKeyId = import.meta.env.VITE_RAZORPAY_KEY_ID as string | undefined
+  const razorpayKeyId = RAZORPAY_KEY_ID
 
   const loadRazorpayScript = () => new Promise<void>((resolve, reject) => {
     if ((window as any).Razorpay) {
@@ -39,7 +40,7 @@ export default function PricingPage() {
 
     try {
       setIsPaying(true)
-      const order = await paymentApi.createOrder(99900, 'INR', 'PREMIUM')
+      const order = await paymentApi.createOrder(59900, 'INR', 'PREMIUM')
       await loadRazorpayScript()
 
       const options = {
@@ -96,7 +97,7 @@ export default function PricingPage() {
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <Navbar />
       <div className="flex-1 flex flex-col items-center py-16 px-4">
-        
+
         <div className="text-center max-w-2xl mx-auto mb-16 animate-fade-in">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary-100 text-primary-700 font-semibold text-sm mb-6">
             <Sparkles size={16} /> Upgrade Your Career
@@ -110,7 +111,7 @@ export default function PricingPage() {
         </div>
 
         <div className="w-full max-w-5xl grid md:grid-cols-2 gap-8 items-center">
-          
+
           {/* Free Tier */}
           <div className="card p-8 md:p-10 border-2 border-transparent bg-white shadow-xl flex flex-col h-full transform transition duration-300 hover:scale-105">
             <h3 className="text-2xl font-bold text-slate-800 mb-2">Free Plan</h3>
@@ -119,7 +120,7 @@ export default function PricingPage() {
               <span className="text-5xl font-extrabold text-slate-900">₹0</span>
               <span className="text-slate-500">/ forever</span>
             </div>
-            
+
             <ul className="space-y-4 mb-8 flex-1">
               {[
                 'Create up to 3 Resumes',
@@ -134,8 +135,8 @@ export default function PricingPage() {
                 </li>
               ))}
             </ul>
-            
-            <button 
+
+            <button
               onClick={() => navigate(user ? '/dashboard' : '/register')}
               className="w-full py-3.5 rounded-xl border-2 border-slate-200 text-slate-700 font-bold hover:bg-slate-50 transition-colors"
             >
@@ -148,14 +149,14 @@ export default function PricingPage() {
             <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-primary-600 to-indigo-600 text-white px-4 py-1.5 rounded-full text-sm font-bold shadow-lg flex items-center gap-1.5">
               <Zap size={14} className="fill-current" /> MOST POPULAR
             </div>
-            
+
             <h3 className="text-2xl font-bold text-primary-600 mb-2">Premium Plan</h3>
             <p className="text-slate-500 mb-6">Supercharge your job search</p>
             <div className="mb-8 flex items-baseline gap-2">
-              <span className="text-5xl font-extrabold text-slate-900">₹999</span>
+              <span className="text-5xl font-extrabold text-slate-900">₹599</span>
               <span className="text-slate-500">/ month</span>
             </div>
-            
+
             <ul className="space-y-4 mb-8 flex-1">
               {[
                 'Unlimited Resumes',
@@ -173,7 +174,7 @@ export default function PricingPage() {
               ))}
             </ul>
 
-            <button 
+            <button
               onClick={handleUpgrade}
               disabled={isPaying || isPremium}
               className={`w-full py-4 rounded-xl font-bold text-white shadow-lg transition-all ${isPremium ? 'bg-green-500 cursor-default' : 'bg-gradient-to-r from-primary-600 to-indigo-600 hover:shadow-primary-500/30 hover:-translate-y-1'}`}

@@ -5,7 +5,7 @@ import { adminApi } from "../../api/adminApi"
 import AdminLayout from "../../components/AdminLayout"
 import type { Notification } from "../../types"
 import toast from "react-hot-toast"
-import { Bell, Send, Trash2, CheckCheck, Users, Clock } from "lucide-react"
+import { Bell, Send, Trash2, CheckCheck, Clock } from "lucide-react"
 
 const NOTIF_TYPES = ["EXPORT_READY", "AI_DONE", "JOB_MATCH", "PLAN_CHANGE", "QUOTA_WARNING", "ATS_COMPLETE", "GENERAL"]
 
@@ -22,7 +22,6 @@ const typeColors: Record<string, string> = {
 export default function AdminNotifications() {
   const qc = useQueryClient()
   const [form, setForm] = useState({ title: "", message: "", type: "GENERAL", target: "ALL" })
-  const [selectedUserIds, setSelectedUserIds] = useState<number[]>([])
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }))
 
@@ -46,8 +45,8 @@ export default function AdminNotifications() {
       const ids = form.target === "ALL"
         ? users.map((u: any) => u.userId)
         : form.target === "PREMIUM"
-        ? users.filter((u: any) => u.subscriptionPlan === "PREMIUM").map((u: any) => u.userId)
-        : selectedUserIds
+          ? users.filter((u: any) => u.subscriptionPlan === "PREMIUM").map((u: any) => u.userId)
+          : users.filter((u: any) => u.subscriptionPlan === "FREE").map((u: any) => u.userId)
       if (!ids.length) { toast.error("No recipients selected"); return Promise.reject() }
       return notificationApi.sendBulk(ids, form.title, form.message, form.type)
     },

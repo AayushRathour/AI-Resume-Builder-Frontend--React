@@ -43,11 +43,17 @@ export const templateApi = {
 
   getFields: (id: number) =>
     api.get(`/templates/${id}/fields`).then(r => {
-      try {
-        return JSON.parse(r.data)
-      } catch {
-        return []
+      const raw = r.data
+      if (Array.isArray(raw)) return raw
+      if (typeof raw === 'string') {
+        try {
+          const parsed = JSON.parse(raw)
+          return Array.isArray(parsed) ? parsed : []
+        } catch {
+          return []
+        }
       }
+      return []
     }),
 
   getFree: () =>

@@ -6,6 +6,7 @@ import { paymentApi } from '../api/paymentApi'
 import Navbar from '../components/Navbar'
 import toast from 'react-hot-toast'
 import { User, Lock, CreditCard, Save, Star, Zap, CheckCircle2, AlertTriangle } from 'lucide-react'
+import { RAZORPAY_KEY_ID } from '../config/api'
 
 export default function ProfilePage() {
   const { user, updateUser, isPremium, logout } = useAuth()
@@ -15,7 +16,7 @@ export default function ProfilePage() {
   const [pwForm, setPwForm] = useState({ oldPassword: '', newPassword: '', confirm: '' })
   const [isPaying, setIsPaying] = useState(false)
 
-  const razorpayKeyId = import.meta.env.VITE_RAZORPAY_KEY_ID as string | undefined
+  const razorpayKeyId = RAZORPAY_KEY_ID
 
   const { data: serverProfile } = useQuery({
     queryKey: ['profile', user?.userId],
@@ -88,7 +89,7 @@ export default function ProfilePage() {
 
     try {
       setIsPaying(true)
-      const order = await paymentApi.createOrder(99900, 'INR', 'PREMIUM')
+      const order = await paymentApi.createOrder(59900, 'INR', 'PREMIUM')
       await loadRazorpayScript()
 
       const options = {
@@ -267,7 +268,7 @@ export default function ProfilePage() {
                 </ul>
                 <button onClick={handleUpgrade} disabled={isPaying}
                   className="btn-primary w-full py-3 shadow-md shadow-primary-200">
-                  {isPaying ? 'Opening Razorpay...' : 'Upgrade Now — ₹999/mo'}
+                  {isPaying ? 'Opening Razorpay...' : 'Upgrade Now — ₹599/mo'}
                 </button>
               </div>
             ) : (

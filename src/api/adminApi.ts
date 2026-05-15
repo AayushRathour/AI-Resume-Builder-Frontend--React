@@ -22,11 +22,24 @@ export interface AiUsageSummary {
 }
 
 export const adminApi = {
-  getUsers: () => api.get<User[]>(EP_ADMIN.USERS).then(r => r.data ?? []),
+  getUsers: () => api.get<User[]>(EP_ADMIN.USERS).then(r => {
+    const raw = r.data ?? []
+    return raw.map((u: any) => ({
+      ...u,
+      // normalize boolean flag - backend may return `isActive` or `active`
+      isActive: Boolean(u.isActive ?? u.active ?? true),
+      isDeleted: Boolean(u.isDeleted ?? u.deleted ?? false),
+      deletedAt: u.deletedAt ?? u.deleted_at ?? undefined,
+      // ensure createdAt exists
+      createdAt: u.createdAt ?? u.created_at ?? new Date().toISOString(),
+    })) as User[]
+  }),
 
   upgradeUser: (userId: number) => api.put<User>(EP_ADMIN.UPGRADE_USER(userId)).then(r => r.data),
 
   suspendUser: (userId: number) => api.put<User>(EP_ADMIN.SUSPEND_USER(userId)).then(r => r.data),
+
+  restoreUser: (userId: number) => api.put<User>(EP_ADMIN.RESTORE_USER(userId)).then(r => r.data),
 
   deleteUser: (userId: number) => api.delete(EP_ADMIN.DELETE_USER(userId)),
 

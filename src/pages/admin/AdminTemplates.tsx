@@ -2,6 +2,7 @@ import { useState, useMemo } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { adminApi } from "../../api/adminApi"
 import AdminLayout from "../../components/AdminLayout"
+import AdminPagination from "../../components/admin/AdminPagination"
 import toast from "react-hot-toast"
 import type { ResumeTemplate } from "../../types"
 import { Plus, Edit3, Eye, AlertCircle, CheckCircle2, ShieldCheck, Wand, Loader2 } from "lucide-react"
@@ -12,12 +13,14 @@ import { renderTemplate } from "../../utils/templateEngine"
 type TemplateCategory = ResumeTemplate["category"]
 
 const CATS: TemplateCategory[] = ["PROFESSIONAL", "CREATIVE", "MODERN", "MINIMALIST", "ATS_OPTIMISED"]
+const ITEMS_PER_PAGE = 10
 
 export default function AdminTemplates() {
   const qc = useQueryClient()
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<ResumeTemplate | null>(null)
   const [showPreview, setShowPreview] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
   const [form, setForm] = useState<{ name: string; description: string; category: TemplateCategory; isPremium: boolean; htmlLayout: string; cssStyles: string }>({
     name: "",
     description: "",
@@ -28,6 +31,12 @@ export default function AdminTemplates() {
   })
 
   const { data: templates = [], isLoading } = useQuery({ queryKey: ["templates-all"], queryFn: adminApi.getTemplates })
+
+  const totalPages = Math.ceil(templates.length / ITEMS_PER_PAGE)
+  const paginatedTemplates = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE
+    return templates.slice(start, start + ITEMS_PER_PAGE)
+  }, [templates, currentPage])
 
   // ── Template validation ──────────────────────────────────────────────
 
@@ -321,84 +330,118 @@ export default function AdminTemplates() {
         </div>
       )}
 
+      {/* Results info */}
+      <div className="mb-2 text-xs text-slate-500">
+        Showing {paginatedTemplates.length > 0 ? (currentPage - 1) * ITEMS_PER_PAGE + 1 : 0} - {Math.min(currentPage * ITEMS_PER_PAGE, templates.length)} of {templates.length} results
+      </div>
+
       <div className="card overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 border-b border-slate-200">
-            <tr>
-              {["Name", "Category", "Type", "Placeholders", "Status", "Actions"].map(h => (
-                <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading ? (
-              [1,2,3].map(i => (
-                <tr key={i}>{[1,2,3,4,5,6].map(j => <td key={j} className="px-4 py-3"><div className="h-4 bg-slate-100 rounded animate-pulse" /></td>)}</tr>
-              ))
-            ) : templates.map((t: ResumeTemplate) => {
-              const val = t.htmlLayout ? validateTemplate(t.htmlLayout) : null
-              return (
-                <tr key={t.templateId} className="border-b border-slate-100 hover:bg-slate-50">
-                  <td className="px-4 py-3 font-medium text-slate-700">{t.name}</td>
-                  <td className="px-4 py-3 text-slate-500 text-xs">{t.category}</td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${t.isPremium ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600"}`}>
-                      {t.isPremium ? "Premium" : "Free"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    {val ? (
-                      <div className="flex items-center gap-1">
-                        {val.valid ? (
-                          <CheckCircle2 size={13} className="text-green-500" />
-                        ) : (
-                          <AlertCircle size={13} className="text-red-500" />
-                        )}
-                        <span className={`text-xs ${val.valid ? 'text-green-600' : 'text-red-600'}`}>
-                          {val.foundPlaceholders.length}/{10}
-                        </span>
-                        {val.hasHardcodedNames && (
-                          <span className="text-[10px] bg-red-100 text-red-600 px-1 rounded">hardcoded</span>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-xs text-slate-400">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs font-medium ${t.isActive ? "text-green-600" : "text-slate-400"}`}>
-                      {t.isActive ? "Active" : "Inactive"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => handleEdit(t)} className="p-1.5 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded transition-colors">
-                        <Edit3 size={14} />
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (window.confirm(`Delete template "${t.name}"?`)) {
-                            remove.mutate(t.templateId)
-                          }
-                        }}
-                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                        disabled={remove.isPending}
-                      >
-                        <svg viewBox="0 0 24 24" className="h-[14px] w-[14px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                          <path d="M3 6h18" />
-                          <path d="M8 6V4h8v2" />
-                          <path d="M19 6l-1 14H6L5 6" />
-                          <path d="M10 11v6" />
-                          <path d="M14 11v6" />
-                        </svg>
-                      </button>
-                    </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-max">
+            <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
+              <tr>
+                {["Name", "Category", "Type", "Placeholders", "Status", "Actions"].map(h => (
+                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading ? (
+                [1,2,3,4,5].map(i => (
+                  <tr key={i}>
+                    {[1,2,3,4,5,6].map(j => <td key={j} className="px-4 py-3"><div className="h-4 bg-slate-100 rounded animate-pulse" /></td>)}
+                  </tr>
+                ))
+              ) : paginatedTemplates.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-4 py-12 text-center text-slate-400 text-sm">
+                    No templates found
                   </td>
                 </tr>
-              )
-            })}
-          </tbody>
-        </table>
+              ) : (
+                paginatedTemplates.map((t: ResumeTemplate) => {
+                  const val = t.htmlLayout ? validateTemplate(t.htmlLayout) : null
+                  return (
+                    <tr key={t.templateId} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                      <td className="px-4 py-3 font-medium text-slate-700 whitespace-nowrap">{t.name}</td>
+                      <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">{t.category}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${t.isPremium ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600"}`}>
+                          {t.isPremium ? "Premium" : "Free"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {val ? (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <div className="flex items-center gap-1">
+                              {val.valid ? (
+                                <CheckCircle2 size={13} className="text-green-500 shrink-0" />
+                              ) : (
+                                <AlertCircle size={13} className="text-red-500 shrink-0" />
+                              )}
+                              <span className={`text-xs font-semibold ${val.valid ? 'text-green-600' : 'text-red-600'}`}>
+                                {val.foundPlaceholders.length}/10
+                              </span>
+                            </div>
+                            {val.hasHardcodedNames && (
+                              <span className="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded">Hardcoded</span>
+                            )}
+                            {val.valid && !val.hasHardcodedNames && (
+                              <span className="text-[10px] bg-green-100 text-green-600 px-1.5 py-0.5 rounded">Valid</span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className={`text-xs font-semibold ${t.isActive ? "text-green-600" : "text-slate-400"}`}>
+                          {t.isActive ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => handleEdit(t)} className="p-1.5 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded transition-colors shrink-0">
+                            <Edit3 size={14} />
+                          </button>
+                          <button 
+                            onClick={() => {
+                              if (window.confirm(`Delete template "${t.name}"?`)) {
+                                remove.mutate(t.templateId)
+                              }
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors shrink-0"
+                            disabled={remove.isPending}
+                            data-testid={`delete-template-${t.templateId}`}
+                          >
+                            <svg viewBox="0 0 24 24" className="h-[14px] w-[14px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <path d="M3 6h18" />
+                              <path d="M8 6V4h8v2" />
+                              <path d="M19 6l-1 14H6L5 6" />
+                              <path d="M10 11v6" />
+                              <path d="M14 11v6" />
+                            </svg>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        {!isLoading && templates.length > 0 && (
+          <AdminPagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            totalItems={templates.length}
+            itemsPerPage={ITEMS_PER_PAGE}
+          />
+        )}
       </div>
     </AdminLayout>
   )
